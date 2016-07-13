@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 use strict;
 use warnings;
 use POSIX;
@@ -41,6 +41,11 @@ my @ymon_en = map{ lc $_ } qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec);
 my %ymon_en_to_digit = map { $ymon_en[$_] => $_ + 1 } (0.. scalar(@ymon_en)-1);
 my $re_tz = qr/[a-zA-Z]{1,4}|[\-\+]\d\d:?\d\d/;
 
+my %tz_map = (
+    GMT => 0,
+    JST => 9 * 3600,
+);
+
 my %gengo_to_year = (
     "K" => 1864, "慶応" => 1864, "慶" => 1864,
     "M" => 1867, "明治" => 1867, "明" => 1867,
@@ -72,6 +77,9 @@ sub gengo_to_year {
 }
 while(<>) {
     chomp;
+    s/^\s+//s;
+    s/\s+\z//s;
+    length $_ or next;
     my ($t, $source) = eval { parse($_) };
     if($@ || !defined $t) {
         warn $@ || "can not convert '$_'\n";
@@ -93,14 +101,7 @@ sub tz_str_parse {
         my ($sign, $H, $M) = @+{qw(sign H M)};
         return ($sign eq "-" ? -1 : +1) * ($H * 3600 + $M * 60);
     }
-    my %map = (
-        GMT => 0,
-        JST => 9 * 3600,
-    );
-    if(defined $map{$tz_str}) {
-        return $map{$tz_str};
-    }
-    Carp::confess("unknown tz_str '$tz_str' ");
+    $tz_map{uc($tz_str)} // Carp::confess("unknown tz_str '$tz_str' ");
 }
 
 sub parse {
