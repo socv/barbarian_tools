@@ -25,6 +25,8 @@ my $r = Getopt::Long::GetOptions(
 if($opt_help) {
     print "Usage: $0 [OPTION] < TEXT\n";
     print "Option:\n";
+    print "  -h, --help    : show this message.\n";
+    print "  -v, --verbose : turn on verbose output.\n";
     print "  -F FORMAT, --format=FORMAT   : (default: '$opt_format')\n";
     print "             --format_z=FORMAT : (default: '$opt_format_z')\n";
     exit;
