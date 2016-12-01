@@ -1,0 +1,89 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+use Getopt::Long qw(:config posix_default no_ignore_case gnu_getopt require_order);
+
+my ($cycle_min, $cycle_default, $cycle_max) = (0.01, 0.1, 100);
+my ($rate_min, $rate_default, $rate_max) = (0.001, 0.25, 1.0);
+
+my $opt_p;
+my $opt_help;
+my $opt_verbose;
+my $opt_cycle = $cycle_default;
+my $opt_rate  = $rate_default;
+Getopt::Long::GetOptions(
+    "h|help"    => \$opt_help,
+    "v|verbose" => \$opt_verbose,
+    "p"         => \$opt_p,
+    "r|rate=f"  => \$opt_rate,
+    "C|cycle=f" => \$opt_cycle,
+) or die "ERROR";
+(@ARGV) or usage();
+($opt_help) and usage();
+
+($rate_min <= $opt_rate && $opt_rate < $rate_max) or usage("--rate=$opt_rate は範囲外");
+($cycle_min <= $opt_cycle && $opt_cycle < $cycle_max) or usage("--cycle=$opt_cycle は範囲外");
+
+my $delay_active   = $opt_cycle * $opt_rate;
+my $delay_inactive = $opt_cycle - $delay_active;
+
+sub usage {
+    my $s = shift;
+    print STDERR "$s\n\n" if $s;
+
+    print STDERR "Usage:\n";
+    print STDERR "  $0 [options] -p pid [pid...]\n";
+    print STDERR "  $0 [options] command [args...]\n";
+    print STDERR "Options:\n";
+    print STDERR "  -h, --help     : これを表示\n";
+    print STDERR "  -v, --verbose  : 余計な表示\n";
+    print STDERR "  -r, --rate=X   : どの程度CPUを与えるか。 デフォルトは $rate_default ($rate_min 以上、 $rate_max 未満)\n";
+    print STDERR "  -C, --cycle=X  : 1周の秒数。 デフォルトは $cycle_default ($cycle_min 以上、 $cycle_max 未満)\n";
+    print STDERR "\n"
+      . " * ionice に似た使い方。\n"
+      . " * SIGSTOP と SIGCONT を交互に送ることで、指定プロセスのCPU使用率を下げる。\n"
+      . " * nice や ionice では物足りない時に。\n"
+      . " * お行儀の悪いツールなので要注意。\n";
+    exit(1);
+}
+
+my $signaled;
+$SIG{INT} = $SIG{QUIT} = sub { $signaled = 1 };
+
+my @pids;
+if ($opt_p) {
+    @pids = @ARGV;
+}
+else {
+    sub sigchld {
+        $SIG{CHLD} = \&sigchld;
+        warn "got SIGCHLD\n" if $opt_verbose;
+        my $dummy = wait;
+        warn "wait -> $dummy\n" if $opt_verbose;
+    }
+    $SIG{CHLD} = \&sigchld;
+    my $pid = fork // die "fork: $!";
+    if (!$pid) {
+        exec(@ARGV);
+        exit;
+    }
+    push @pids, $pid;
+}
+
+warn "pids=@pids\n" if $opt_verbose;
+
+my %pids = map { $_ => "" } @pids;
+my $func = sub {
+    my $signal   = shift;
+    my $duration = shift;
+    for my $pid (keys %pids) {
+        $! = undef;
+        my $r = kill($signal => $pid) or delete $pids{$pid};
+        warn "kill $signal=>$pid -> r=$r". ($! ? " (\$!=$!)" : "") . "\n" if $! || $opt_verbose;
+    }
+    select(undef, undef, undef, $duration) if %pids;  # hires sleep
+};
+while (%pids && !$signaled) {
+    $func->("STOP", $delay_inactive);
+    $func->("CONT", $delay_active);
+}
