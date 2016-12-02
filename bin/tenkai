@@ -1,0 +1,113 @@
+#!/usr/bin/perl
+
+# 「サブディレクトリーを掘らずに沢山のファイルを詰め込んでる」ようなアーカイブファイルを
+# うっかり展開してしまった結果カレントディレクトリーが大量のゴミだらけになる
+# なんて悲劇が減りますように
+
+use strict;
+use warnings;
+use Cwd ();
+use POSIX ();
+
+
+for my $pack (@ARGV) {
+    tenkai($pack);
+}
+
+sub tenkai {
+    my $pack_rel = shift;
+    my $pack = Cwd::abs_path($pack_rel);
+
+    unless(-e $pack) { warn "$pack: ありません\n"; return; }
+
+    my $unpack_func;
+    my $base;
+    if($pack =~ m{([^/]+)\.zip\z}s) {
+        $base = $1;
+        $unpack_func = sub {
+            exec_("unzip", "--", $pack);
+        };
+    }
+    elsif($pack =~ m{([^/]+)\.tar.\w+\z}s) {
+        $base = $1;
+        $unpack_func = sub {
+            exec_("tar", "-xaf", "--", $pack);
+        };
+    }
+    elsif($pack =~ m{([^/]+)\.rpm\z}s) {
+        $base = $1;
+        $unpack_func = sub {
+            if(!open(STDIN, "-|")) {
+                exec_("cat", "--", $pack);
+                POSIX::abort();
+            }
+            exec_("rpm2cpio - | cpio --extract --make-directories");
+        };
+    }
+    else {
+        warn "$pack: 不明な種類\n";
+        return;
+    }
+
+    my $tmp_name;
+    for(my $i = 0; $i < 1000; ++$i) {
+        my $t = $base . POSIX::strftime(".%Y%m%dT%H%M%S", localtime(time)) . ".$$.$i.tmp";
+        next if -e $t;
+        if(!mkdir $t, 0755) {
+            if($! == 17) {
+                warn "WARNING: mkdir '$t': (errno=".($! + 0).") $!";
+                next;
+            }
+            die "ERROR: mkdir '$t': (errno=".($! + 0).") $!\n";
+        }
+        $tmp_name = $t;
+        last;
+    }
+    ($tmp_name) or die "一時ファイル名の作成に失敗しました";
+
+    if(!open(CHILD, "-|")) {
+        chdir $tmp_name or die "ERROR: chdir '$tmp_name': $!\n";
+        $unpack_func->();
+        exit;
+    }
+    print <CHILD>;
+    close(CHILD);
+
+    opendir(DIR, $tmp_name) or die "opendir '$tmp_name': $!\n";
+    my @files = grep { $_ ne "." && $_ ne ".." } readdir(DIR);
+    closedir(DIR);
+
+    if(!@files) {
+        warn "$pack_rel: 展開できませんでした\n";
+    }
+    elsif(@files == 1) {
+        my $file = $files[0];
+        my $extracted = "$tmp_name/$file";
+        unless(-e $file) {
+            if(!rename($extracted => $file)) {
+                warn "rename '$extracted' => '$file' : $!\n";
+            }
+            else {
+                $extracted = $file;
+                rmdir $tmp_name or warn "rmdir '$tmp_name': $!\n";
+            }
+        }
+        warn "$pack_rel: 展開されました: $extracted\n";
+    }
+    else {
+        my $extracted = $tmp_name;
+        unless(-e $base) {
+            if(!rename($extracted => $base)) {
+                warn "rename '$extracted' => '$base' : $!\n";
+            }
+            else {
+                $extracted = $base;
+            }
+        }
+        warn "$pack_rel: 展開されました: $extracted\n";
+    }
+}
+sub exec_ {
+    print STDERR "command=@_\n";
+    exec(@_);
+}
