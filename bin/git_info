@@ -1,0 +1,64 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+use Cwd ();
+use YAML::Syck ();
+use POSIX;
+
+$ENV{LANG} = $ENV{LC_MESSAGES} = $ENV{LC_ALL} = "C";
+POSIX::setlocale(LC_ALL, "C"); POSIX::setlocale(LC_MESSAGES, "C");
+
+
+sub system_to_array {
+    my %args = @_;
+    my $wd = $args{wd};
+    my $command = $args{command};
+    if(!open(PIPE, "-|")) {
+        defined $wd and (chdir $wd or die "$0: ERROR: chdir '$wd': $!");
+        exec @$command;
+        exit;
+    }
+    my @result = map { chomp; $_ } <PIPE>;
+    close(PIPE);
+    if($?) {
+        my ($e, $s) = ($? >> 8, $? & 0xff);
+        my $status = $s ? "signal=$s" : "exit_code=$e";
+        die "ERROR: external command exited with error status ($status): @$command\n";
+    }
+    wantarray ? @result : \@result;
+}
+
+my @result_array;
+my @dir = @ARGV ? @ARGV : ".";
+for my $dir (@dir) {
+    my %result;
+    push @result_array, \%result;
+
+    $result{_dir} = Cwd::abs_path($dir);
+
+    unless(-d $dir) {
+        $result{_error} = $! || "is not directory";
+        next;
+    }
+
+    my @remote = system_to_array(wd => $dir, command => ["git remote -v"]);
+    @{ $result{_remote}{"remote -v"} } = @remote;
+    for (@remote) {
+        if(s/^(\w+)\s+(.+)\s+\((\w+)\)\z/$2/s) {
+            $result{_remote}{types}{$3}{$1} = $_;
+        }
+    }
+
+    $result{"branch --contains=HEAD"} = system_to_array(wd => $dir, command => ["git branch --contains=HEAD"]);
+
+    my @log = system_to_array(wd => $dir, command => [
+        "git", "log", "-n", 1, "--date=iso", "--pretty=format:"
+        . "Ref-Names: %D\n"
+        . "Commit-Hash: %H\n"
+        . "Commit-Hash-Abbrev: %h\n"
+        . "Commit-Date-Epoch: %ct\n"
+        . "Commit-Date-ISO8601: %cI\n"
+    ]);
+    $result{commit} = +{ map { split(/: /, $_, 2) } @log };
+}
+print YAML::Syck::Dump(\@result_array);
