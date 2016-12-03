@@ -37,10 +37,7 @@ sub tenkai {
     elsif($pack =~ m{([^/]+)\.rpm\z}s) {
         $base = $1;
         $unpack_func = sub {
-            if(!open(STDIN, "-|")) {
-                exec_("cat", "--", $pack);
-                POSIX::abort();
-            }
+            open(STDIN, "<", $pack) or die "$pack: open: $!\n";
             exec_("rpm2cpio - | cpio --extract --make-directories");
         };
     }
