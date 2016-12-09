@@ -1,44 +1,74 @@
-#!/usr/bin/perl
+#!/usr/bin/perl -TW
 use strict;
 use warnings;
 use Getopt::Long qw(:config posix_default no_ignore_case gnu_getopt require_order);
+use Time::HiRes;
+use List::Util qw(max min sum);
+use POSIX;
+
 
 my ($cycle_min, $cycle_default, $cycle_max) = (0.01, 0.1, 100);
 my ($rate_min, $rate_default, $rate_max) = (0.001, 0.25, 1.0);
 
-my $opt_p;
+my $opt_nice = 15;
+my $opt_arg_is_pid;
+my $opt_arg_is_pgid;
 my $opt_help;
+my $opt_debug;
 my $opt_verbose;
+my $opt_quiet;
 my $opt_cycle = $cycle_default;
 my $opt_rate  = $rate_default;
+my $opt_boost = undef;
+
 Getopt::Long::GetOptions(
     "h|help"    => \$opt_help,
+    "q|quiet" => \$opt_quiet,
     "v|verbose" => \$opt_verbose,
-    "p"         => \$opt_p,
+    "D|debug" => \$opt_debug,
+    "p|pid"       => \$opt_arg_is_pid,
     "r|rate=f"  => \$opt_rate,
-    "C|cycle=f" => \$opt_cycle,
+    "c|cycle=f" => \$opt_cycle,
+    "boost!" => \$opt_boost,
+    "P|pgid" => \$opt_arg_is_pgid,
+    "nice=i" => \$opt_nice,
 ) or die "ERROR";
 (@ARGV) or usage();
 ($opt_help) and usage();
 
 ($rate_min <= $opt_rate && $opt_rate < $rate_max) or usage("--rate=$opt_rate は範囲外");
 ($cycle_min <= $opt_cycle && $opt_cycle < $cycle_max) or usage("--cycle=$opt_cycle は範囲外");
+($opt_boost && $opt_arg_is_pgid) and usage("--boost と --pgid の両方は同時に使えません");
+if(!$opt_arg_is_pgid && !defined $opt_boost) {
+    $opt_boost = 1;
+}
+($opt_arg_is_pid && $opt_arg_is_pgid) and usage("--pid と --pgid を両方同時に使うことはできません");
 
-my $delay_active   = $opt_cycle * $opt_rate;
-my $delay_inactive = $opt_cycle - $delay_active;
+
+unless($opt_quiet) {
+    print STDERR "$0: INFO: cycle=$opt_cycle, rate=$opt_rate\n";
+}
 
 sub usage {
     my $s = shift;
     print STDERR "$s\n\n" if $s;
 
+    (my $myname = $0) =~ s/.*\///;
     print STDERR "Usage:\n";
-    print STDERR "  $0 [options] -p pid [pid...]\n";
-    print STDERR "  $0 [options] command [args...]\n";
+    print STDERR "  $myname [options] -p PID [PID...]\n";
+    print STDERR "  $myname [options] -P PGID [PGID...]\n";
+    print STDERR "  $myname [options] command [args...]\n";
     print STDERR "Options:\n";
     print STDERR "  -h, --help     : これを表示\n";
     print STDERR "  -v, --verbose  : 余計な表示\n";
+    print STDERR "      --debug    : もっと余計な表示\n";
+    print STDERR "  -p, --pid      : パラメーターは実行するコマンドではなく、プロセスIDである\n";
+    print STDERR "  -P, --pgid     : パラメーターは実行するコマンドではなく、プロセスグループIDである\n";
     print STDERR "  -r, --rate=X   : どの程度CPUを与えるか。 デフォルトは $rate_default ($rate_min 以上、 $rate_max 未満)\n";
     print STDERR "  -C, --cycle=X  : 1周の秒数。 デフォルトは $cycle_default ($cycle_min 以上、 $cycle_max 未満)\n";
+    print STDERR "      --boost    : CPU使用率が rate に足りていない場合、多めに時間を割り当てる (--pgid でない場合デフォルトで有効)\n";
+    print STDERR "      --no-boost : --boost を無効化\n";
+    print STDERR "      --nice=X   : デフォルト15。0以外ならばreniceする。(同時にioniceも)\n";
     print STDERR "\n"
       . " * ionice に似た使い方。\n"
       . " * SIGSTOP と SIGCONT を交互に送ることで、指定プロセスのCPU使用率を下げる。\n"
@@ -48,18 +78,23 @@ sub usage {
 }
 
 my $signaled;
-$SIG{INT} = $SIG{QUIT} = sub { $signaled = 1 };
+$SIG{INT} = $SIG{QUIT} = $SIG{TERM} = sub {
+    my $sig = shift;
+    warn "caught signal $sig\n";
+    if($signaled) { warn "caught signal $sig -> abort\n"; POSIX::abort(); }
+    $signaled = $sig;
+};
 
-my @pids;
-if ($opt_p) {
-    @pids = @ARGV;
+my @ids;
+if ($opt_arg_is_pid || $opt_arg_is_pgid) {
+    @ids = @ARGV;
 }
 else {
     sub sigchld {
         $SIG{CHLD} = \&sigchld;
-        warn "got SIGCHLD\n" if $opt_verbose;
+        print_debug("got SIGCHLD");
         my $dummy = wait;
-        warn "wait -> $dummy\n" if $opt_verbose;
+        print_debug("wait -> $dummy\n");
     }
     $SIG{CHLD} = \&sigchld;
     my $pid = fork // die "fork: $!";
@@ -67,23 +102,167 @@ else {
         exec(@ARGV);
         exit;
     }
-    push @pids, $pid;
+    push @ids, $pid;
 }
 
-warn "pids=@pids\n" if $opt_verbose;
+for (@ids) {
+    (/^([1-9][0-9]{0,4})\z/s) or die "$0: ERROR: invalid format pid '$_'\n";
+    $_ = $1;
+}
 
-my %pids = map { $_ => "" } @pids;
-my $func = sub {
+print_verbose(($opt_arg_is_pgid ? "pgid" : "pid") . "=@ids");
+
+my @pid = @ids;
+if($opt_arg_is_pgid) {
+    @pid = get_pids_by_pgids(@ids);
+    print_verbose("pgid=(@ids), pid=(@pid)");
+    scalar(@pid) or die "pgid (@ids) となるプロセスは存在しません\n";
+}
+
+if($opt_nice) {
+    $ENV{PATH} = "/usr/bin:/bin";
+    system("renice", $opt_nice, @pid);
+    system("ionice", "-c3", "-p", @pid);
+}
+
+
+use Config;
+my @sig_name = split(/ /, $Config{sig_name});
+my @sig_num  = split(/ /, $Config{sig_num});
+my %sig_name_to_num = (
+    (map { $sig_name[$_] => $sig_num[$_] } (1 .. (@sig_name - 1))),
+    (map { $_ => $_ } @sig_num),
+);
+
+
+my %ids = map { $_ => "" } @ids;
+
+sub send_signal {
     my $signal   = shift;
-    my $duration = shift;
-    for my $pid (keys %pids) {
-        $! = undef;
-        my $r = kill($signal => $pid) or delete $pids{$pid};
-        warn "kill $signal=>$pid -> r=$r". ($! ? " (\$!=$!)" : "") . "\n" if $! || $opt_verbose;
+    print_debug("send_signal($signal)");
+    if($opt_arg_is_pgid) {
+        $signal = - $sig_name_to_num{$signal};
     }
-    select(undef, undef, undef, $duration) if %pids;  # hires sleep
+    my @result; my $error_found;
+    for my $id (keys %ids) {
+        $! = undef;
+        my $r = kill($signal => $id) or delete $ids{$id};
+        $error_found ||= $!;
+        push @result, "$id -> r=$r" . ($! ? " (\$!=$!)" : "");
+    }
+    if($error_found || $opt_verbose) {
+        my $mesg = "kill $signal => (". join(", ", @result) .")";
+        if($error_found) {
+            print_notice($mesg);
+        }
+        else {
+            print_debug($mesg);
+        }
+    }
 };
-while (%pids && !$signaled) {
-    $func->("STOP", $delay_inactive);
-    $func->("CONT", $delay_active);
+my $delay_active   = $opt_cycle * $opt_rate;
+my $delay_inactive_default = $opt_cycle - $delay_active;
+my %last_cpu_time = map { $_ => read_cpu_time($_) } keys %ids;
+
+my $sent_SIGSTOP = 0;
+while (%ids) {
+    my $s = Time::HiRes::gettimeofday();
+
+    if($sent_SIGSTOP) {
+        send_signal("CONT");
+        $sent_SIGSTOP = 0;
+    }
+    last unless %ids;
+    last if $signaled;
+    Time::HiRes::sleep($delay_active);
+    last if $signaled;
+
+    my $elapsed = sprintf("%.6f", Time::HiRes::gettimeofday() - $s);
+
+    my $delay_inactive = $delay_inactive_default;
+
+    if($opt_boost) {
+        my $max_cpu_time = 0;
+        my @used;
+        for my $pid (keys %ids) {
+            eval {
+                my $cpu_time = read_cpu_time($pid);
+                my $used = sprintf("%.2f", $cpu_time - $last_cpu_time{$pid});
+                $last_cpu_time{$pid} = $cpu_time;
+
+                $max_cpu_time = max($max_cpu_time, $used);
+                push @used, $used;
+            };
+            if($@) {
+                warn "WARNING: $@";
+                delete $ids{$pid};
+            }
+        }
+
+        $delay_inactive = ($max_cpu_time / $opt_rate) - $elapsed;
+        print_verbose("opt_rate=$opt_rate, opt_cycle=$opt_cycle, delay_active=$delay_active"
+            . " : elapsed=$elapsed, cpu_time=({@used}, max_cpu_time=$max_cpu_time)"
+            . " : delay_inactive=(default=$delay_inactive_default, $delay_inactive)");
+    }
+
+    if($delay_inactive > 0) {
+        send_signal("STOP");
+        $sent_SIGSTOP = 1;
+        Time::HiRes::sleep($delay_inactive);
+    }
+}
+
+
+sub read_proc_stat {
+    my $pid = shift;
+    my $fn = "/proc/$pid/stat";
+    open(STAT, "<", $fn) or die "$fn: open: $!\n";
+    my %values;
+    @values{qw(pid comm state ppid pgrp session tty_nr tpgid flags minflt cminflt majflt cmajflt utime stime cutime cstime priority nice)}
+      = split(/ /, <STAT>);
+    close(STAT);
+    wantarray ? %values : \%values;
+}
+sub read_cpu_time {
+    my $pid = shift;
+    my %stat = read_proc_stat($pid);
+    return sprintf("%.2f", 0.01 * sum @stat{qw(utime stime cutime cstime)});
+}
+sub get_pids_by_pgids {
+    my @pgid = @_;
+    my %pgid = map { $_ => 1 } @pgid;
+
+    opendir(D, "/proc") or die "opendir '/proc': $!\n";
+    my @pid = grep { /^\d+$/ } readdir(D);
+    closedir(D);
+    @pid = grep {
+        my %stat = read_proc_stat($_);
+        $pgid{ $stat{pgrp} };
+    } @pid;
+    wantarray ? @pid : \@pid;
+}
+sub sprint_current_time {
+    my ($s, $u) = Time::HiRes::gettimeofday();
+    strftime("%Y-%m-%dT%H:%M:%S", localtime $s) . sprintf(".%06d", $u);
+}
+sub print_verbose {
+    my $mesg = shift;
+    if($opt_verbose) {
+        chomp $mesg;
+        warn sprint_current_time(). ": VERBOSE: $mesg\n";
+    }
+}
+sub print_debug {
+    my $mesg = shift;
+    if($opt_debug) {
+        chomp $mesg;
+        warn sprint_current_time(). ": DEBUG: $mesg\n";
+    }
+}
+sub print_notice {
+    my $mesg = shift;
+    if($opt_debug) {
+        chomp $mesg;
+        warn sprint_current_time(). ": NOTICE: $mesg\n";
+    }
 }
