@@ -13,6 +13,7 @@ my ($rate_min, $rate_default, $rate_max) = (0.001, 0.25, 1.0);
 my $opt_nice = 15;
 my $opt_arg_is_pid;
 my $opt_arg_is_pgid;
+my $opt_arg_is_commandname;
 my $opt_help;
 my $opt_debug;
 my $opt_verbose;
@@ -27,10 +28,11 @@ Getopt::Long::GetOptions(
     "v|verbose" => \$opt_verbose,
     "D|debug" => \$opt_debug,
     "p|pid"       => \$opt_arg_is_pid,
+    "P|pgid" => \$opt_arg_is_pgid,
+    "name" => \$opt_arg_is_commandname,
     "r|rate=f"  => \$opt_rate,
     "c|cycle=f" => \$opt_cycle,
     "boost!" => \$opt_boost,
-    "P|pgid" => \$opt_arg_is_pgid,
     "nice=i" => \$opt_nice,
 ) or die "ERROR";
 (@ARGV) or usage();
@@ -43,6 +45,8 @@ if(!$opt_arg_is_pgid && !defined $opt_boost) {
     $opt_boost = 1;
 }
 ($opt_arg_is_pid && $opt_arg_is_pgid) and usage("--pid と --pgid を両方同時に使うことはできません");
+($opt_arg_is_commandname && $opt_arg_is_pgid) and usage("--name と --pgid を両方同時に使うことはできません");
+($opt_arg_is_pid && $opt_arg_is_commandname) and usage("--pid と --name を両方同時に使うことはできません");
 
 
 unless($opt_quiet) {
@@ -56,6 +60,7 @@ sub usage {
     (my $myname = $0) =~ s/.*\///;
     print STDERR "Usage:\n";
     print STDERR "  $myname [options] -p PID [PID...]\n";
+    print STDERR "  $myname [options] --name COMMAND_NAME [...]\n";
     print STDERR "  $myname [options] -P PGID [PGID...]\n";
     print STDERR "  $myname [options] command [args...]\n";
     print STDERR "Options:\n";
@@ -64,6 +69,7 @@ sub usage {
     print STDERR "      --debug    : もっと余計な表示\n";
     print STDERR "  -p, --pid      : パラメーターは実行するコマンドではなく、プロセスIDである\n";
     print STDERR "  -P, --pgid     : パラメーターは実行するコマンドではなく、プロセスグループIDである\n";
+    print STDERR "      --name     : パラメーターは実行するコマンドではなく、既存プロセスのコマンド名\n";
     print STDERR "  -r, --rate=X   : どの程度CPUを与えるか。 デフォルトは $rate_default ($rate_min 以上、 $rate_max 未満)\n";
     print STDERR "  -c, --cycle=X  : 1周の秒数。 デフォルトは $cycle_default ($cycle_min 以上、 $cycle_max 未満)\n";
     print STDERR "      --boost    : CPU使用率が rate に足りていない場合、多めに時間を割り当てる (--pgid でない場合デフォルトで有効)\n";
@@ -86,7 +92,18 @@ $SIG{INT} = $SIG{QUIT} = $SIG{TERM} = sub {
 };
 
 my @ids;
-if ($opt_arg_is_pid || $opt_arg_is_pgid) {
+if($opt_arg_is_commandname) {
+    my %comm = map { ("($_)" => 1) } @ARGV;
+    my @all_pids = get_all_pids();
+    @ids = grep {
+        my %stat = read_proc_stat($_);
+        $comm{ $stat{comm} };
+    } @all_pids;
+    if(!@ids) {
+        die "コマンド名の条件 (@ARGV) にあうプロセス見つかりませんでした";
+    }
+}
+elsif ($opt_arg_is_pid || $opt_arg_is_pgid) {
     @ids = @ARGV;
 }
 else {
@@ -228,17 +245,20 @@ sub read_cpu_time {
     my %stat = read_proc_stat($pid);
     return sprintf("%.2f", 0.01 * sum @stat{qw(utime stime cutime cstime)});
 }
+sub get_all_pids {
+    opendir(D, "/proc") or die "opendir '/proc': $!\n";
+    my @pid = grep { /^\d+$/ } readdir(D);
+    closedir(D);
+    wantarray ? @pid : \@pid;
+}
 sub get_pids_by_pgids {
     my @pgid = @_;
     my %pgid = map { $_ => 1 } @pgid;
 
-    opendir(D, "/proc") or die "opendir '/proc': $!\n";
-    my @pid = grep { /^\d+$/ } readdir(D);
-    closedir(D);
-    @pid = grep {
+    my @pid = grep {
         my %stat = read_proc_stat($_);
         $pgid{ $stat{pgrp} };
-    } @pid;
+    } get_all_pids();
     wantarray ? @pid : \@pid;
 }
 sub sprint_current_time {
