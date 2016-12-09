@@ -65,7 +65,7 @@ sub usage {
     print STDERR "  -p, --pid      : パラメーターは実行するコマンドではなく、プロセスIDである\n";
     print STDERR "  -P, --pgid     : パラメーターは実行するコマンドではなく、プロセスグループIDである\n";
     print STDERR "  -r, --rate=X   : どの程度CPUを与えるか。 デフォルトは $rate_default ($rate_min 以上、 $rate_max 未満)\n";
-    print STDERR "  -C, --cycle=X  : 1周の秒数。 デフォルトは $cycle_default ($cycle_min 以上、 $cycle_max 未満)\n";
+    print STDERR "  -c, --cycle=X  : 1周の秒数。 デフォルトは $cycle_default ($cycle_min 以上、 $cycle_max 未満)\n";
     print STDERR "      --boost    : CPU使用率が rate に足りていない場合、多めに時間を割り当てる (--pgid でない場合デフォルトで有効)\n";
     print STDERR "      --no-boost : --boost を無効化\n";
     print STDERR "      --nice=X   : デフォルト15。0以外ならばreniceする。(同時にioniceも)\n";
