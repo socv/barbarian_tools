@@ -1,0 +1,10 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+my $target = shift @ARGV // die "Usage: $0 target\n";
+
+system("make", $target);
+if($?) {
+  exit 1;
+}
+exec($target, @ARGV);
