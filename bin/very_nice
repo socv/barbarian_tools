@@ -1,4 +1,8 @@
 #!/usr/bin/perl -TW
+
+# * 類似のツール
+#  * https://github.com/opsengine/cpulimit
+
 use strict;
 use warnings;
 use Getopt::Long qw(:config posix_default no_ignore_case gnu_getopt require_order);
@@ -93,11 +97,47 @@ $SIG{INT} = $SIG{QUIT} = $SIG{TERM} = sub {
 
 my @ids;
 if($opt_arg_is_commandname) {
-    my %comm = map { ("($_)" => 1) } @ARGV;
+    my %comm;
+    my @re_command;
+    for(@ARGV) {
+        if($_ =~ m{^/}s || $_ =~ m{/$}s) {
+            (m{^/(.+)/\z}s) or die "'$_' は不正な書式です。前後を / で囲む必要があります\n";
+            my $re = $1;
+            push @re_command, qr{$re};
+        }
+        else {
+            $comm{"($_)"} = 1;
+        }
+    }
+
     my @all_pids = get_all_pids();
     @ids = grep {
-        my %stat = read_proc_stat($_);
-        $comm{ $stat{comm} };
+        my $pid = $_;
+        if($pid == $$) {
+            0;
+        }
+        else {
+            my %stat = read_proc_stat($pid);
+            if($comm{ $stat{comm} }) {
+                1;
+            }
+            else {
+                my $matched = 0;
+                if(@re_command) {
+                    my $cmdline = read_proc_cmdline($pid);
+                    for my $re (@re_command) {
+                        if($cmdline =~ $re) {
+                            my $cmdline_encoded = $cmdline;
+                            $cmdline_encoded =~ s{\0}{ }gs;
+                            print_info("matched /$re/ : pid=$pid, cmdline=$cmdline_encoded");
+                            $matched = 1;
+                            last;
+                        }
+                    }
+                }
+                $matched;
+            }
+        }
     } @all_pids;
     if(!@ids) {
         die "コマンド名の条件 (@ARGV) にあうプロセス見つかりませんでした";
@@ -230,6 +270,16 @@ while (%ids) {
 }
 
 
+sub read_proc_cmdline {
+    my $pid = shift;
+    my $fn = "/proc/$pid/cmdline";
+    open(FILE, "<", $fn) or die "$fn: open: $!\n";
+    local $/ = undef;
+    my $cmdline = <FILE>;
+    close(FILE);
+    wantarray ? split(/\0/, $cmdline) : $cmdline;
+}
+
 sub read_proc_stat {
     my $pid = shift;
     my $fn = "/proc/$pid/stat";
@@ -281,8 +331,15 @@ sub print_debug {
 }
 sub print_notice {
     my $mesg = shift;
-    if($opt_debug) {
+    unless($opt_quiet) {
         chomp $mesg;
         warn sprint_current_time(). ": NOTICE: $mesg\n";
+    }
+}
+sub print_info {
+    my $mesg = shift;
+    unless($opt_quiet) {
+        chomp $mesg;
+        warn sprint_current_time(). ": INFO: $mesg\n";
     }
 }
