@@ -162,10 +162,10 @@ else {
     push @ids, $pid;
 }
 
-for (@ids) {
+@ids = map {
     (/^([1-9][0-9]{0,4})\z/s) or die "$0: ERROR: invalid format pid '$_'\n";
-    $_ = $1;
-}
+    $1;
+} @ids;
 
 print_verbose(($opt_arg_is_pgid ? "pgid" : "pid") . "=@ids");
 
@@ -176,10 +176,17 @@ if($opt_arg_is_pgid) {
     scalar(@pid) or die "pgid (@ids) となるプロセスは存在しません\n";
 }
 
+@pid = map {
+    (/^([1-9][0-9]{0,4})\z/s) or die "$0: ERROR: invalid format pid '$_'\n";
+    $1;
+} @pid;
+
 if($opt_nice) {
+    ($opt_nice =~ m{^(\d+)\z}) or die "ERROR: invalid format --nice=$opt_nice\n";
+    $opt_nice = $1;
     $ENV{PATH} = "/usr/bin:/bin";
-    system("renice", $opt_nice, @pid);
-    system("ionice", "-c3", "-p", @pid);
+    system("/usr/bin/renice", $opt_nice, @pid);
+    system("/usr/bin/ionice", "-c3", "-p", @pid);
 }
 
 
@@ -297,7 +304,7 @@ sub read_cpu_time {
 }
 sub get_all_pids {
     opendir(D, "/proc") or die "opendir '/proc': $!\n";
-    my @pid = grep { /^\d+$/ } readdir(D);
+    my @pid = map { /^(\d+)$/; $1 } grep { /^\d+$/ } readdir(D);
     closedir(D);
     wantarray ? @pid : \@pid;
 }
