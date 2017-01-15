@@ -9,6 +9,7 @@ use Getopt::Long qw(:config posix_default no_ignore_case gnu_getopt require_orde
 use Time::HiRes;
 use List::Util qw(max min sum);
 use POSIX;
+use Carp;
 
 
 my ($cycle_min, $cycle_default, $cycle_max) = (0.01, 0.1, 100);
@@ -185,8 +186,20 @@ if($opt_nice) {
     ($opt_nice =~ m{^(\d+)\z}) or die "ERROR: invalid format --nice=$opt_nice\n";
     $opt_nice = $1;
     $ENV{PATH} = "/usr/bin:/bin";
-    system("/usr/bin/renice", $opt_nice, @pid);
+    system_("/usr/bin/renice", $opt_nice, @pid);
     system("/usr/bin/ionice", "-c3", "-p", @pid);
+}
+sub system_ {
+    my @command_arg = @_;
+    for(my $i = 0; $i < @command_arg; ++$i) {
+        use Scalar::Util ();
+        if(Scalar::Util::tainted($command_arg[$i])) {
+            warn "ERROR: when call system_(@command_arg)\n";
+            warn "command_arg[$i] = '$command_arg[$i]' is tainted\n";
+            Carp::confess("fatal");
+        }
+    }
+    system(@command_arg);
 }
 
 
