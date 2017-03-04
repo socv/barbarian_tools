@@ -1,0 +1,197 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use Getopt::Long qw(:config posix_default no_ignore_case gnu_getopt);
+use Sys::Syslog qw(:standard :macros);
+use Time::HiRes;
+
+my $opt_dry_run;
+my $opt_list;
+my $opt_help;
+my $opt_no_ionice;
+my $opt_nice = 1;
+my $opt_sleep_1;
+my $opt_sleep_2;
+
+Getopt::Long::GetOptions(
+    "h|help"           => \$opt_help,
+    "l|list"           => \$opt_list,
+    "n|dry-run"        => \$opt_dry_run,
+    "nice=i"           => \$opt_nice,
+    "no-ionice"        => \$opt_no_ionice,
+    "s|sleep-first=s"  => \$opt_sleep_1,
+    "S|sleep-second=s" => \$opt_sleep_2,
+) or die "fatal error\n";
+
+my @dirs = @ARGV;
+if ($opt_help) { help() }
+(@dirs) or usage();
+sub usage {
+    print "Usage: $0 [OPTION...] DIR\n";
+    print "Try `$0 --help' for more information.\n";
+    exit 1;
+}
+sub help {
+    print "## Usage\n";
+    print "\n";
+    print "```\n";
+    print "$0 [OPTION...] DIR...\n";
+    print "```\n";
+    print "\n";
+    print "## Option\n";
+    print "\n";
+    print "| 短表記  | 長表記              | 意味 |\n";
+    print "|:--------|:--------------------|:-----|\n";
+    print "| -h      | --help              | これ\n";
+    print "| -l      | --list              | (+x -x を付記しながら) 候補となるファイルを表示\n";
+    print "| -n      | --dry-run           | 実際に実行せず、実行するはずだったスクリプトのパスを表示\n";
+    print "|         | --no-ionice         | ioniceを使わない\n";
+    print "|         | --nice=N            | (default 1) nice値を指定。0ならniceを使わない\n";
+    print "| -s M..N | --sleep-first=M..N  | 最初のタスク前のsleep\n";
+    print "| -S M..N | --sleep-second=M..N | 2番目からのタスク前のsleep\n";
+    print "\n";
+    print "## \"M..N\" の説明\n";
+    print "\n";
+    print "  * MとNに秒数を表す整数を記載すると、最小M〜最大Nのランダムな時間sleepします\n";
+    print "  * \"M..\" を省略すると、 \"0..N\" が書かれたものと見なされます。\n";
+    exit 1;
+}
+
+for (@dirs) {
+    (-d $_) or die "$0: ERROR: not a directory: $_\n";
+}
+
+my ($opt_sleep_1_min, $opt_sleep_1_max) = parse_time_range($opt_sleep_1, "--sleep-first");
+my ($opt_sleep_2_min, $opt_sleep_2_max) = parse_time_range($opt_sleep_2, "--sleep-second");
+sub parse_time_range {
+    my ($arg, $name) = @_;
+    my ($min, $max)
+      = (!defined $arg) ? (undef, undef)
+      : ($arg =~ m{^(\d+)$}) ? (0, $1)
+      : ($arg =~ m{^(\d+)\.\.(\d+)$}) ? ($1, $2)
+      :                                 die "ERROR: invalid format $name=$arg\n";
+    ($min, $max);
+}
+
+system("renice $opt_nice $$ >/dev/null 2>&1") if $opt_nice;
+system("ionice -c3 -p $$ >/dev/null 2>&1") unless $opt_no_ionice;
+
+for my $dir (@dirs) {
+    eval { do_each_dir($dir); };
+    if ($@) {
+        warn $@;
+    }
+}
+
+{
+    package RunPartsX::StopWatch;
+    use strict;
+    use warnings;
+    use overload bool => sub {1}, '""' => 'stringify', fallback => 1;
+
+    sub stringify {
+        my $self    = shift;
+        my $elapsed = Time::HiRes::gettimeofday() - $self->{time};
+        my (undef, undef, $cu, $cs) = times();
+        my ($user, $system) = (($cu - $self->{clock}[2]) / 100, ($cs - $self->{clock}[3]) / 100);
+        sprintf("(%.2fuser %.2fsystem %.3felapsed)", $user, $system, $elapsed);
+    }
+    sub new {
+        my $class = shift;
+        my $self = bless {}, $class;
+        $self->{time}  = Time::HiRes::gettimeofday();
+        $self->{clock} = [times()];
+        $self;
+    }
+}
+
+sub run_script {
+    my %args      = @_;
+    my $fn        = $args{fn};
+    my $path      = $args{path};
+    my $index     = $args{index};
+    my $n_scripts = $args{n_scripts};
+
+    my ($sleep_min, $sleep_max)
+      = (!$index)
+      ? ($opt_sleep_1_min, $opt_sleep_1_max)
+      : ($opt_sleep_2_min, $opt_sleep_2_max);
+
+    if ($sleep_min || $sleep_max) {
+        my $sleep = $sleep_min;
+        $sleep += int(rand($sleep_max - $sleep_min + 1)) if $sleep_max > $sleep_min;
+        if ($sleep > 0) {
+            syslog(LOG_NOTICE, "sleep ($sleep) ...");
+            sleep($sleep);
+        }
+    }
+
+    syslog(LOG_NOTICE, "starting $fn");
+
+    my $stop_watch_file = RunPartsX::StopWatch->new;
+    my $child_proc;
+    if (!open($child_proc, "-|")) {
+        open(STDERR, ">&STDOUT") or warn "dup2: $!";
+        exec($path);
+        exit 1;
+    }
+    local $/ = undef;
+    my $output = <$child_proc>;
+    close($child_proc);
+
+    my ($exit_status, $signal) = ($? >> 8, $? & 0xff);
+    my $status = "";
+    $status .= " (exit=$exit_status)" if $exit_status;
+    $status .= " (signal=$signal)"    if $signal;
+
+    $output =~ s/\e\[[\d\;]*m//gs;
+    $output =~ s/\r*\n|\r/\n/gs;
+    if (length $output) {
+        print "\n$path:\n" . $output;
+    }
+    syslog(($status ? LOG_ERR : LOG_NOTICE), "finished $fn$status $stop_watch_file");
+}
+sub do_each_dir {
+    my $dir = shift;
+    $dir =~ s{/*$}{/};
+    if (!opendir(DIR, $dir)) {
+        die "$0: WARNING: opendir '$dir': $!\n";
+    }
+    my @files = grep { $_ ne "." && $_ ne ".." } sort readdir(DIR);
+    closedir(DIR);
+
+    my @scripts;
+    for my $fn (@files) {
+        my $path = $dir . $fn;
+        next unless -f $path;
+        next if $fn =~ m{\.(cfsaved|rpmsave|rpmorig|rpmnew|swp)$};
+        next if $fn =~ m{(\,v|\,|\~)$};
+
+        if ($opt_list) {
+            printf("%s %s\n", ((-x $path) ? "+x" : "-x"), $path);
+            next;
+        }
+        next unless -x $path;
+
+        if ($opt_dry_run) {
+            print "$path\n";
+        }
+        else {
+            push @scripts, +{ fn => $fn, path => $path };
+        }
+    }
+
+    my $n_scripts = @scripts;
+    if ($n_scripts) {
+        my $stop_watch_dir = RunPartsX::StopWatch->new;
+        openlog("run-parts-x($dir)", "ndelay,pid", "cron");
+        syslog(LOG_NOTICE, "$n_scripts scripts start") if $n_scripts > 1;
+
+        for (my $index = 0; $index < $n_scripts; ++$index) {
+            local $_ = $scripts[$index];
+            run_script(fn => $_->{fn}, path => $_->{path}, index => $index, n_scripts => $n_scripts);
+        }
+        syslog(LOG_NOTICE, "$n_scripts scripts finished $stop_watch_dir") if $n_scripts > 1;
+        closelog();
+    }
+}
