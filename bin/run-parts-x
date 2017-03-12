@@ -4,7 +4,9 @@ use warnings;
 use Getopt::Long qw(:config posix_default no_ignore_case gnu_getopt);
 use Sys::Syslog qw(:standard :macros);
 use Time::HiRes;
+use POSIX;
 
+my $isatty = POSIX::isatty(*STDERR) ? *STDERR : POSIX::isatty(*STDOUT) ? *STDOUT : undef;
 my $opt_dry_run;
 my $opt_list;
 my $opt_help;
@@ -17,8 +19,8 @@ Getopt::Long::GetOptions(
     "h|help"           => \$opt_help,
     "l|list"           => \$opt_list,
     "n|dry-run"        => \$opt_dry_run,
-    "nice=i"           => \$opt_nice,
-    "no-ionice"        => \$opt_no_ionice,
+    "N|nice=i"           => \$opt_nice,
+    "I|no-ionice"        => \$opt_no_ionice,
     "s|sleep-first=s"  => \$opt_sleep_1,
     "S|sleep-second=s" => \$opt_sleep_2,
 ) or die "fatal error\n";
@@ -45,8 +47,8 @@ sub help {
     print "| -h      | --help              | これ\n";
     print "| -l      | --list              | (+x -x を付記しながら) 候補となるファイルを表示\n";
     print "| -n      | --dry-run           | 実際に実行せず、実行するはずだったスクリプトのパスを表示\n";
-    print "|         | --no-ionice         | ioniceを使わない\n";
-    print "|         | --nice=N            | (default 1) nice値を指定。0ならniceを使わない\n";
+    print "| -I      | --no-ionice         | ioniceを使わない\n";
+    print "| -N N    | --nice=N            | (default 1) nice値を指定。0ならniceを使わない\n";
     print "| -s M..N | --sleep-first=M..N  | 最初のタスク前のsleep\n";
     print "| -S M..N | --sleep-second=M..N | 2番目からのタスク前のsleep\n";
     print "\n";
@@ -111,6 +113,7 @@ sub run_script {
     my $path      = $args{path};
     my $index     = $args{index};
     my $n_scripts = $args{n_scripts};
+    my $dir = $args{dir};
 
     my ($sleep_min, $sleep_max)
       = (!$index)
@@ -121,12 +124,12 @@ sub run_script {
         my $sleep = $sleep_min;
         $sleep += int(rand($sleep_max - $sleep_min + 1)) if $sleep_max > $sleep_min;
         if ($sleep > 0) {
-            syslog(LOG_NOTICE, "sleep ($sleep) ...");
+            print_log("run-parts-x($dir)", LOG_NOTICE, "sleep ($sleep) ...");
             sleep($sleep);
         }
     }
 
-    syslog(LOG_NOTICE, "starting $fn");
+    print_log("run-parts-x($dir)", LOG_NOTICE, "starting $fn");
 
     my $stop_watch_file = RunPartsX::StopWatch->new;
     my $child_proc;
@@ -149,7 +152,7 @@ sub run_script {
     if (length $output) {
         print "\n$path:\n" . $output;
     }
-    syslog(($status ? LOG_ERR : LOG_NOTICE), "finished $fn$status $stop_watch_file");
+    print_log("run-parts-x($dir)", ($status ? LOG_ERR : LOG_NOTICE), "finished $fn$status $stop_watch_file");
 }
 sub do_each_dir {
     my $dir = shift;
@@ -184,14 +187,23 @@ sub do_each_dir {
     my $n_scripts = @scripts;
     if ($n_scripts) {
         my $stop_watch_dir = RunPartsX::StopWatch->new;
-        openlog("run-parts-x($dir)", "ndelay,pid", "cron");
-        syslog(LOG_NOTICE, "$n_scripts scripts start") if $n_scripts > 1;
+        print_log("run-parts-x($dir)", LOG_NOTICE, "$n_scripts scripts start") if $n_scripts > 1;
 
         for (my $index = 0; $index < $n_scripts; ++$index) {
             local $_ = $scripts[$index];
-            run_script(fn => $_->{fn}, path => $_->{path}, index => $index, n_scripts => $n_scripts);
+            run_script(dir => $dir, fn => $_->{fn}, path => $_->{path}, index => $index, n_scripts => $n_scripts);
         }
-        syslog(LOG_NOTICE, "$n_scripts scripts finished $stop_watch_dir") if $n_scripts > 1;
-        closelog();
+        print_log("run-parts-x($dir)", LOG_NOTICE, "$n_scripts scripts finished $stop_watch_dir") if $n_scripts > 1;
     }
+}
+
+sub print_log {
+    my ($ident, $level, $message) = @_;
+    chomp $message;
+    if($isatty) {
+        print $isatty POSIX::strftime("%Y-%m-%dT%H:%M:%S: ", localtime time) . "$ident\[$$]: $message\n";
+    }
+    openlog($ident, "ndelay,pid", "cron");
+    syslog($level, $message);
+    closelog();
 }
