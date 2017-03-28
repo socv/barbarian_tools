@@ -1,0 +1,6 @@
+#!/bin/sh
+
+cd /tmp&&mkdir git_build&&cd git_build \
+&& git clone --depth=1 https://github.com/git/git . \
+&& make configure&&./configure --prefix ~/gitprefix --with-curl --with-libpcre --with-openssl&&make install \
+&& rm -rf /tmp/git_build
