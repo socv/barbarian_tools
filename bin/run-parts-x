@@ -167,11 +167,10 @@ sub run_script {
 sub do_each_dir {
     my $dir = shift;
     $dir =~ s{/*$}{/};
-    if (!opendir(DIR, $dir)) {
-        die "$0: WARNING: opendir '$dir': $!\n";
-    }
-    my @files = grep { $_ ne "." && $_ ne ".." } sort readdir(DIR);
-    closedir(DIR);
+
+    opendir(my $dir_fh, $dir) or die "$0: WARNING: opendir '$dir': $!\n";
+    my @files = grep { $_ ne "." && $_ ne ".." } sort readdir($dir_fh);
+    closedir($dir_fh);
 
     open(my $fh_lock, $dir) or die "$0: WARNING: open '$dir': $!\n";
     my $error_lock = take_flock($fh_lock, $dir);
