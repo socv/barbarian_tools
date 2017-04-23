@@ -1,0 +1,142 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use Getopt::Long qw(:config posix_default no_ignore_case gnu_getopt);
+
+sub usage {
+    my $mesg = shift;
+    print STDERR "ERROR: $mesg\n";
+    print STDERR "Usage: $0 [OPTION..] FILE..\n";
+    exit;
+}
+sub help {
+    print "# Synopsis:\n";
+    print "sortしなくてもいいuniq\n";
+    print "# Usage:\n";
+    print "   $0 [OPTION..] FILE..\n";
+    print "# Option:\n";
+    print "|  -h    | --help             | これ\n";
+    print "## output:\n";
+    print "|  -c,   | --count            | 数える\n";
+    print "|  -T,   | --with-total       | 全体で何行あったかを表示する\n";
+    print "|  -P,   | --with-percent     | 各々の出現行数だけでなく、パーセントも表示する\n";
+    print "|  -L,   | --show-last-line   | 同一扱いされた行のうち、最も後ろの行を出力対象とする\n";
+    print "## search:\n";
+    print "|  -d,   | --repeated         | 同一内容で複数行現れた行だけ\n";
+    print "|  -u,   | --unique           | 同一内容で複数行現れなかった行だけ\n";
+    print "|  -i,   | --ignore-case      | 英字の大文字小文字の違いを無視する\n";
+    print "|  -f N, | --skip-fields=N    | 頭からNフィールドは無視する\n";
+    print "|  -s N, | --skip-chars=N     | 頭からN文字は無視する\n";
+    print "|        | --check-fields=N   | Nフィールドだけ比較する\n";
+    print "|  -w N, | --check-chars=N    | N文字だけ比較する\n";
+    print "## sort:\n";
+    print "|        | --sort=count_desc  | 個数の多い順\n";
+    print "|        | --sort=count_asc   | 個数の少ない順\n";
+    exit 1;
+}
+
+my $opt_help;
+my $opt_verbose;
+my $opt_quiet;
+my $opt_count;
+my $opt_repeated;
+my $opt_unique;
+my $opt_icase;
+my $opt_skip_fields;
+my $opt_skip_chars;
+my $opt_check_fields;
+my $opt_check_chars;
+my $opt_show_last_line;
+my $opt_with_total;
+my $opt_with_percent;
+my $opt_sort;
+Getopt::Long::GetOptions(
+    'h|help' => \$opt_help,
+    'v|verbose' => \$opt_verbose,
+    'q|quiet' => \$opt_quiet,
+    'c|count' => \$opt_count,
+    'T|with-total' => \$opt_with_total,
+    'P|with-percent' => \$opt_with_percent,
+    'd|repeated' => \$opt_repeated,
+    'u|unique' => \$opt_unique,
+    'i|ignore-case' => \$opt_icase,
+    'f|skip-fields=i' => \$opt_skip_fields,
+    's|skip-chars=i' => \$opt_skip_chars,
+    'check-fields=i' => \$opt_check_fields,
+    'w|check-chars=i' => \$opt_check_chars,
+    'L|show-last-line' => \$opt_show_last_line,
+    'sort=s' => \$opt_sort,
+) or usage();
+if($opt_help) { help(); }
+if(defined $opt_sort) {
+    ($opt_sort =~ m{\A(count_desc|count_asc)\z}) or usage("unknown option --sort=$opt_sort");
+}
+
+my $re_skip_fields;
+$re_skip_fields = qr/\A(\s+\S+){1,$opt_skip_fields}\s*/s if $opt_skip_fields && $opt_skip_fields > 0;
+
+sub capture_key {
+    my $line = shift;
+    my $s = $line;
+
+    if($re_skip_fields) {
+        $s =~ s{\A\s*}{ }s;
+        $s =~ s/$re_skip_fields//os;
+    }
+    if($opt_check_fields) {
+        $s =~ s{\A\s*}{ }s;
+        $s =~ s/\A((?:\s+\S+){$opt_check_fields}).*$/$1/os;
+    }
+
+     substr($s, 0, $opt_skip_chars, "") if $opt_skip_chars;
+     substr($s, $opt_check_chars) = "" if $opt_check_chars;
+
+    $s =~ tr/a-z/A-Z/ if $opt_icase;
+    $s;
+}
+my @key_order;
+my %counter;
+my $counter_total = 0;
+
+while(<>) {
+    chomp;
+    $counter_total++;
+    my $line = $_;
+    my $key = capture_key($line);
+    if(!$counter{$key}) {
+        $counter{$key} = [];
+        push @key_order, $key;
+    }
+    push @{ $counter{$key} }, $line;
+}
+
+sub do_append {
+    my($count, $line) = @_;
+    my @out;
+
+    push @out, sprintf(" %7d", $count) if $opt_count;
+    push @out, sprintf("%5.1f%%", $count / $counter_total * 100) if $opt_with_percent && $counter_total;
+    push @out, $line;
+
+    print join(" ", @out) . "\n";
+}
+
+if($opt_sort) {
+    if($opt_sort eq "count_asc") {
+        @key_order = sort { scalar(@{ $counter{$a} }) <=> scalar(@{ $counter{$b} }) } @key_order;
+    }
+    if($opt_sort eq "count_desc") {
+        @key_order = sort { scalar(@{ $counter{$b} }) <=> scalar(@{ $counter{$a} }) } @key_order;
+    }
+}
+
+for my $key (@key_order) {
+    my $count = scalar(@{ $counter{$key} });
+    next if $opt_unique    && $count > 1;
+    next if $opt_repeated  && $count < 2;
+
+    my $line = $counter{$key}->[ $opt_show_last_line ? -1 : 0 ];
+    do_append($count, $line);
+}
+do_append($counter_total, "(total)") if $opt_with_total;
+
