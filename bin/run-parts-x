@@ -107,6 +107,16 @@ for my $dir (@dirs) {
     }
 }
 
+use Fcntl qw(:flock);
+sub take_flock {
+    my ($fh, $filename) = @_;
+    flock($fh, LOCK_EX | LOCK_NB) ? '' : $! || "ERROR";
+}
+sub release_lock {
+    my ($fh, $filename) = @_;
+    flock($fh, LOCK_UN) or die "flock(('$filename'), LOCK_UN) : $!";
+}
+
 sub run_script {
     my %args      = @_;
     my $fn        = $args{fn};
@@ -162,6 +172,10 @@ sub do_each_dir {
     }
     my @files = grep { $_ ne "." && $_ ne ".." } sort readdir(DIR);
     closedir(DIR);
+
+    open(my $fh_lock, $dir) or die "$0: WARNING: open '$dir': $!\n";
+    my $error_lock = take_flock($fh_lock, $dir);
+    $error_lock and die "ERROR: lock '$dir' : $error_lock\n";
 
     my @scripts;
     for my $fn (@files) {
