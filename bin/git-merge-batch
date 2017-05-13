@@ -1,0 +1,80 @@
+#!/usr/bin/env perl
+# どばっとmasterをバラ撒ける
+use strict;
+use warnings;
+use Getopt::Long qw(:config posix_default no_ignore_case gnu_getopt require_order);
+
+(my $SELF_NAME = $0) =~ s(.*/)()s;
+my $COLOR_RESET = "\e[m";
+my $COLOR_WARN = $COLOR_RESET . "\e[1;33;41m";
+my $COLOR_INFO = $COLOR_RESET . "\e[1;37;44m";
+
+my $remote = "origin";
+my $quiet;
+Getopt::Long::GetOptions(
+    "q|quiet" => \$quiet,
+    "r|remote=s" => \$remote,
+) or usage();
+my @opt_quiet;
+push @opt_quiet, "-q" if $quiet;
+
+
+(@ARGV >= 2) or usage();
+sub usage {
+    die "usage: $0 [--remote=REMOTE] SRC-BRANCH DST-BRANCH[...]\n";
+}
+
+my $src_branch = shift @ARGV;
+my @dst_branch = @ARGV;
+
+our @message_header;
+$SIG{__WARN__} = \&print_warn_message;
+$SIG{__DIE__} = sub { print_warn_message(@_); exit 1 };
+
+if(`git status -s`) {
+    system_wrap("git", "status");
+}
+
+system_wrap("git", "fetch", $remote);
+
+for my $dst_branch (@dst_branch) {
+    local @message_header = ("dst_branch=$dst_branch");
+    print_info_message("=" x 60);
+    eval {
+        system_wrap("git", "checkout", $dst_branch);
+        eval {
+            system_wrap("git", "push", @opt_quiet, "-u", $remote, $dst_branch);
+            system_wrap("git", "pull", @opt_quiet, $remote, $dst_branch);
+            system_wrap("git", "merge", "$remote/$src_branch");
+            system_wrap("git", "push", @opt_quiet, "-u", $remote, $dst_branch);
+        };
+        my $err = $@;
+        eval { system_wrap("git", "checkout", @opt_quiet, "-"); };
+        warn $@ if $@;
+        die $err if $err;
+    };
+    warn $@ if $@;
+}
+
+sub system_wrap {
+    my @command = @_;
+    print_info_message("system: @command");
+    system(@command);
+    if($?) {
+        die "system: ERROR: "
+          . (($? >> 8) ? sprintf("exit=%d", $? >> 8) : sprintf("signal=%d", $? & 0xff))
+          . ": @command\n";
+    }
+    0;
+}
+sub print_warn_message {
+    chomp (my $s = shift);
+    print STDERR $COLOR_WARN . "$SELF_NAME: " . join("", map { "$_: " } @message_header)
+      . $s . $COLOR_RESET . "\n";
+}
+sub print_info_message {
+    return if $quiet;
+    chomp (my $s = shift);
+    print STDERR $COLOR_INFO . "$SELF_NAME: " . join("", map { "$_: " } @message_header)
+      . $s . $COLOR_RESET . "\n";
+}
