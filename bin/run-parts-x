@@ -119,8 +119,17 @@ for my $dir (@dirs) {
 
 use Fcntl qw(:flock);
 sub take_flock {
-    my ($fh, $filename) = @_;
-    flock($fh, LOCK_EX | LOCK_NB) ? '' : $! || "ERROR";
+    my ($fh, $filename, $limit) = @_;
+    my $error_lock;
+    my $start_time = Time::HiRes::gettimeofday();
+    while(1) {
+        $error_lock = flock($fh, LOCK_EX | LOCK_NB) ? '' : $! || "ERROR";
+        last if !$error_lock; # success
+        last if $! != 11;  # (11=EAGAIN=EWOULDBLOCK)
+        last if !$limit || Time::HiRes::gettimeofday() >= $start_time + $limit;  # time over
+        Time::HiRes::sleep(0.1);
+    }
+    return $error_lock;
 }
 sub release_lock {
     my ($fh, $filename) = @_;
@@ -183,7 +192,7 @@ sub do_each_dir {
     closedir($dir_fh);
 
     open(my $fh_lock, $dir) or die "$0: WARNING: open '$dir': $!\n";
-    my $error_lock = take_flock($fh_lock, $dir);
+    my $error_lock = take_flock($fh_lock, $dir, 15);
     $error_lock and die "ERROR: lock '$dir' : $error_lock\n";
 
     my @scripts;
