@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use Getopt::Long qw(:config posix_default no_ignore_case gnu_getopt);
 use Sys::Syslog qw(:standard :macros);
-use Time::HiRes;
+use Time::HiRes ();
 use POSIX;
 
 my $isatty = POSIX::isatty(*STDERR) ? *STDERR : POSIX::isatty(*STDOUT) ? *STDOUT : undef;
