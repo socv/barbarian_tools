@@ -29,7 +29,10 @@ my @dst_branch = @ARGV;
 
 our @message_header;
 $SIG{__WARN__} = \&print_warn_message;
-$SIG{__DIE__} = sub { print_warn_message(@_); exit 1 };
+$SIG{__DIE__} = sub {
+    print_warn_message(@_) unless $^S;
+    die @_
+};
 
 if(`git status -s`) {
     system_wrap("git", "status");
