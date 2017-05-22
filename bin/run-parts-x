@@ -6,6 +6,8 @@ use Sys::Syslog qw(:standard :macros);
 use Time::HiRes ();
 use POSIX;
 
+(my $SELF_NAME = $0) =~ s(.*/)()s;
+
 my $isatty = POSIX::isatty(*STDERR) ? *STDERR : POSIX::isatty(*STDOUT) ? *STDOUT : undef;
 my $opt_dry_run;
 my $opt_list;
@@ -24,6 +26,14 @@ Getopt::Long::GetOptions(
     "s|sleep-first=s"  => \$opt_sleep_1,
     "S|sleep-second=s" => \$opt_sleep_2,
 ) or die "fatal error\n";
+
+
+$SIG{__WARN__} = \&print_warn_message;
+sub print_warn_message {
+    chomp (my $s = shift);
+    print STDERR "$SELF_NAME: " . $s . "\n";
+}
+
 
 my @dirs = @ARGV;
 if ($opt_help) { help() }
