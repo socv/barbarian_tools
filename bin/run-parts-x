@@ -151,10 +151,11 @@ sub run_script {
 
     if ($sleep_min || $sleep_max) {
         my $sleep = $sleep_min;
-        $sleep += int(rand($sleep_max - $sleep_min + 1)) if $sleep_max > $sleep_min;
+        $sleep += rand($sleep_max - $sleep_min + 1) if $sleep_max > $sleep_min;
+        $sleep = sprintf("%.1f", $sleep);
         if ($sleep > 0) {
-            print_log("run-parts-x($dir)", LOG_NOTICE, "sleep ($sleep) ...");
-            sleep($sleep);
+            print_log("run-parts-x($dir)", LOG_NOTICE, "sleep ($sleep\[s]) ...");
+            Time::HiRes::sleep($sleep);
         }
     }
 
