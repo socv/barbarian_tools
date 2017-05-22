@@ -178,8 +178,11 @@ sub run_script {
 
     $output =~ s/\e\[[\d\;]*m//gs;
     $output =~ s/\r*\n|\r/\n/gs;
+    $output =~ s/\A([^\S\n]*\n)+//s;
+    $output =~ s/\s+\z//s;
     if (length $output) {
-        print "\n$path:\n" . $output;
+        print "\n$path:\n"
+          . "$output\n";
     }
     print_log("run-parts-x($dir)", ($status ? LOG_ERR : LOG_NOTICE), "finished $fn$status $stop_watch_file");
 }
