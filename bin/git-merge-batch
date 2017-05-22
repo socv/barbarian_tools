@@ -43,7 +43,7 @@ for my $dst_branch (@dst_branch) {
     eval {
         system_wrap("git", "checkout", $dst_branch);
         eval {
-            system_wrap("git", "push", @opt_quiet, "-u", $remote, $dst_branch);
+            system_wrap("git", "branch", @opt_quiet, "-u", "$remote/$dst_branch");
             system_wrap("git", "pull", @opt_quiet, $remote, $dst_branch);
             system_wrap("git", "merge", "$remote/$src_branch");
             system_wrap("git", "push", @opt_quiet, "-u", $remote, $dst_branch);
