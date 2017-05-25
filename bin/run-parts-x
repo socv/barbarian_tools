@@ -199,7 +199,7 @@ sub do_each_dir {
     closedir($dir_fh);
 
     open(my $fh_lock, $dir) or die "$0: WARNING: open '$dir': $!\n";
-    my $error_lock = take_flock($fh_lock, $dir, 15);
+    my $error_lock = take_flock($fh_lock, $dir, 30);
     $error_lock and die "ERROR: lock '$dir' : $error_lock\n";
 
     my @scripts;
