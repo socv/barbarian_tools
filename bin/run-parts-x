@@ -183,7 +183,10 @@ sub run_script {
     $output =~ s/\s+\z//s;
     if (length $output) {
         print "\n$path:\n"
-          . "$output\n";
+          . "length=" . length($output) . "\n"
+          . "{{{\n"
+          . "$output\n"
+          . "}}}\n";
     }
     print_log("run-parts-x($dir)", ($status ? LOG_ERR : LOG_NOTICE), "finished $fn$status $stop_watch_file");
 }
