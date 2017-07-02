@@ -34,6 +34,12 @@ sub tenkai {
             exec_("tar", "-xaf", $pack);
         };
     }
+    elsif($pack =~ m{([^/]+)\.7z\z}s) {
+        $base = $1;
+        $unpack_func = sub {
+            exec_("7za", "x", $pack);
+        };
+    }
     elsif($pack =~ m{([^/]+)\.rpm\z}s) {
         $base = $1;
         $unpack_func = sub {
