@@ -1,0 +1,3 @@
+#!/usr/bin/env perl
+exec("git", "ls-files", "--exclude-standard", "--ignored", @ARGV);
+
