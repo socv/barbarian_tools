@@ -1,2 +1,2 @@
 #!/usr/bin/env perl
-exec("git", "branch", "--contains", "--all", @ARGV);
+exec("git", "branch", "--all", "--contains", @ARGV);
