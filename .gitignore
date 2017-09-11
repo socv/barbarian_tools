@@ -1,0 +1,5 @@
+*.bin
+*.class
+*.beam
+*.hi
+*.o
