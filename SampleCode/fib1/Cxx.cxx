@@ -3,9 +3,9 @@
 // C++
 // https://en.wikipedia.org/wiki/Fibonacci_number
 
-size_t fibonacci(size_t n) {
+size_t fib(size_t n) {
   if (n < 2) return n;
-  return fibonacci(n - 2) + fibonacci(n - 1);
+  return fib(n - 2) + fib(n - 1);
 }
 
 int main(int argc, char**argv) {
@@ -13,6 +13,6 @@ int main(int argc, char**argv) {
       std::cerr << "Usage: " << argv[0] << " N\n";
       exit(1);
    }
-   std::cout << fibonacci(atoi(argv[1])) << std::endl;
+   std::cout << fib(atoi(argv[1])) << std::endl;
    return 0;
 }
