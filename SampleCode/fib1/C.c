@@ -4,9 +4,9 @@
 // C
 // https://en.wikipedia.org/wiki/Fibonacci_number
 
-size_t fibonacci(size_t n) {
+size_t fib(size_t n) {
    if (n < 2) return n;
-   return fibonacci(n - 2) + fibonacci(n - 1);
+   return fib(n - 2) + fib(n - 1);
 }
 
 int main(int argc, char**argv) {
@@ -14,6 +14,6 @@ int main(int argc, char**argv) {
       fprintf(stderr, "Usage: %s N\n", argc);
       exit(1);
    }
-   printf("%zd\n", fibonacci(atoi(argv[1])));
+   printf("%zd\n", fib(atoi(argv[1])));
    return 0;
 }
