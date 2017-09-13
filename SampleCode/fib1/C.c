@@ -11,7 +11,7 @@ size_t fib(size_t n) {
 
 int main(int argc, char**argv) {
    if(argc != 2) {
-      fprintf(stderr, "Usage: %s N\n", argc);
+      fprintf(stderr, "Usage: %s N\n", argv[0]);
       exit(1);
    }
    printf("%zd\n", fib(atoi(argv[1])));
