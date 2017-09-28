@@ -1,0 +1,20 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+my $current_branch_name = `git rev-parse --abbrev-ref HEAD`;
+chomp $current_branch_name;
+($current_branch_name =~ m{\A\w}s)
+  or die "ERROR: linvalid current_branch_name '$current_branch_name'\n";
+
+my $git_config_list;
+if(!open($git_config_list, "-|")) {
+    exec("git", "config", "--list");
+    exit(1);
+}
+
+while(<$git_config_list>) {
+    if(index($_, "branch.$current_branch_name.") == 0) {
+        print $_;
+    }
+}
