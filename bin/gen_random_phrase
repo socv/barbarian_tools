@@ -1,0 +1,61 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+my $n_lines = 16;
+
+my @candidates;
+
+my @range = split(qr{}, shift (@ARGV) // "a-z");
+while (@range) {
+    local $_ = shift @range;
+    if (@candidates && @range && $_ eq "-") {
+        my $end = ord(shift @range);
+        for (my $c = ord($candidates[-1]) + 1; $c <= $end; ++$c) {
+            push @candidates, chr($c);
+        }
+        next;
+    }
+    push @candidates, $_;
+}
+push @candidates, ('a' .. 'z') if !@candidates;
+
+my @phrase_length;
+push @phrase_length, split(/\D+/, shift @ARGV) if @ARGV;
+push @phrase_length, (12, 13, 14, 15, 16) if !@phrase_length;
+
+my $filename_urandom = '/dev/urandom';
+open(my $fh, "<", $filename_urandom) or die "ERROR: open '$filename_urandom': $!";
+
+print "n_candidates: " . scalar(@candidates) . "\n";
+my $total_columns = 0;
+for my $phrase_length (@phrase_length) {
+    printf(" %-${phrase_length}s", "$phrase_length chars");
+    $total_columns += 1 + $phrase_length;
+}
+print "\n";
+for my $phrase_length (@phrase_length) {
+    printf(" %-${phrase_length}s", sprintf("%.1f bit", log(scalar @candidates) / log(2) * $phrase_length));
+}
+print "\n";
+
+for (my $line_num = 0; $line_num < $n_lines; ++$line_num) {
+    for my $phrase_length (@phrase_length) {
+        print " ";
+        for (my $i = 0; $i < $phrase_length; ++$i) {
+            my $v = get_rand_int($fh, scalar(@candidates));
+            print $candidates[$v];
+        }
+    }
+    print "\n";
+}
+
+printf "%.${total_columns}s\n", ("|----+----" x int(($total_columns + 9) / 10));
+printf "%${total_columns}s\n", $total_columns;
+
+sub get_rand_int {
+    my ($fh, $n) = @_;
+    my $tmp;
+    sysread($fh, $tmp, 4) or die "sysread: $!";
+    return unpack("N", $tmp) % $n;
+}
