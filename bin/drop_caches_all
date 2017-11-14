@@ -1,0 +1,45 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use POSIX;
+
+my $MEGA        = 1024 * 1024;
+my @OUTPUT_KEYS = qw(MemFree Slab Cached);
+
+print POSIX::strftime("current-time:%FT%T\n", localtime);
+
+my %before = meminfo();
+printf("MemTotal:%7.3fG\n", $before{MemTotal});
+print sprint_header();
+print sprint_info(\%before, "before");
+
+system("sync ; sleep 1; sync");
+my $command = "echo 3 > /proc/sys/vm/drop_caches";
+$command = "sudo sh -c '$command'" if $<;
+
+system($command) and die "$0: ERROR: command=\"$command\"\n";
+
+my %after = meminfo();
+my %diff = map { $_ => $after{$_} - $before{$_} } keys %before;
+print sprint_info(\%diff, "diff", 1);
+print sprint_info(\%after, "after");
+
+sub meminfo {
+    return map {
+        my ($k, $v) = split(/:?\s+/, $_, 3); ($k => $v / $MEGA);
+    } split /\n/, `cat /proc/meminfo`;
+}
+
+sub sprint_header {
+    my $format = " %-7s  |";
+    sprintf("%8s |", "")
+      . join("", map { sprintf($format, $_) } @OUTPUT_KEYS)
+      . "\n";
+}
+sub sprint_info {
+    my ($info, $label, $print_flag) = @_;
+    my $format = $print_flag ? " %+7.3fG |" : " %7.3fG |";
+    sprintf("%8s |", $label)
+      . join("", map { sprintf($format, $info->{$_}) } @OUTPUT_KEYS)
+      . "\n";
+}
