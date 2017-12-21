@@ -1,0 +1,24 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use autodie qw(close);
+
+our $VERSION = '1.00';
+
+my $pipe;
+if (!open($pipe, "-|")) {
+    exec("git log -n1 --pretty='format:%h' 2>/dev/null");
+    exit;
+}
+my $hash = <$pipe>;
+close($pipe);
+
+if (defined $hash) {
+    chomp $hash;
+    if (length $hash) {
+        print "$hash\n" or die "ERROR: print: $!\n";
+    }
+}
+else {
+    exit 1;
+}
