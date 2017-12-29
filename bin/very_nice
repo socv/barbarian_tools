@@ -297,7 +297,7 @@ sub read_proc_cmdline {
     open($fh, "<", $fn) or die "$fn: open: $!\n";
     local $/ = undef;
     my $cmdline = <$fh>;
-    close($fh);
+    close($fh) or die "ERROR: close: $!";
     wantarray ? split(/\0/, $cmdline) : $cmdline;
 }
 
@@ -309,7 +309,7 @@ sub read_proc_stat {
     my %values;
     @values{qw(pid comm state ppid pgrp session tty_nr tpgid flags minflt cminflt majflt cmajflt utime stime cutime cstime priority nice)}
       = split(/ /, <$fh>);
-    close($fh);
+    close($fh) or die "ERROR: close: $!";
     wantarray ? %values : \%values;
 }
 sub read_cpu_time {
@@ -321,7 +321,7 @@ sub get_all_pids {
     my $fh;
     opendir($fh, "/proc") or die "opendir '/proc': $!\n";
     my @pid = map { /^(\d+)$/; $1 } grep { /^\d+$/ } readdir($fh);
-    closedir($fh);
+    closedir($fh) or die "ERROR: closedir: $!";
     wantarray ? @pid : \@pid;
 }
 sub get_pids_by_pgids {
