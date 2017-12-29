@@ -10,6 +10,7 @@ use Time::HiRes;
 use List::Util qw(max min sum);
 use POSIX;
 use Carp;
+use Scalar::Util ();
 
 
 my ($cycle_min, $cycle_default, $cycle_max) = (0.01, 0.1, 100);
@@ -192,7 +193,6 @@ if($opt_nice) {
 sub system_ {
     my @command_arg = @_;
     for(my $i = 0; $i < @command_arg; ++$i) {
-        use Scalar::Util ();
         if(Scalar::Util::tainted($command_arg[$i])) {
             warn "ERROR: when call system_(@command_arg)\n";
             warn "command_arg[$i] = '$command_arg[$i]' is tainted\n";
