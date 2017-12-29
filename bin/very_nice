@@ -293,21 +293,23 @@ while (%ids) {
 sub read_proc_cmdline {
     my $pid = shift;
     my $fn = "/proc/$pid/cmdline";
-    open(FILE, "<", $fn) or die "$fn: open: $!\n";
+    my $fh;
+    open($fh, "<", $fn) or die "$fn: open: $!\n";
     local $/ = undef;
-    my $cmdline = <FILE>;
-    close(FILE);
+    my $cmdline = <$fh>;
+    close($fh);
     wantarray ? split(/\0/, $cmdline) : $cmdline;
 }
 
 sub read_proc_stat {
     my $pid = shift;
     my $fn = "/proc/$pid/stat";
-    open(STAT, "<", $fn) or die "$fn: open: $!\n";
+    my $fh;
+    open($fh, "<", $fn) or die "$fn: open: $!\n";
     my %values;
     @values{qw(pid comm state ppid pgrp session tty_nr tpgid flags minflt cminflt majflt cmajflt utime stime cutime cstime priority nice)}
-      = split(/ /, <STAT>);
-    close(STAT);
+      = split(/ /, <$fh>);
+    close($fh);
     wantarray ? %values : \%values;
 }
 sub read_cpu_time {
@@ -316,9 +318,10 @@ sub read_cpu_time {
     return sprintf("%.2f", 0.01 * sum @stat{qw(utime stime cutime cstime)});
 }
 sub get_all_pids {
-    opendir(D, "/proc") or die "opendir '/proc': $!\n";
-    my @pid = map { /^(\d+)$/; $1 } grep { /^\d+$/ } readdir(D);
-    closedir(D);
+    my $fh;
+    opendir($fh, "/proc") or die "opendir '/proc': $!\n";
+    my @pid = map { /^(\d+)$/; $1 } grep { /^\d+$/ } readdir($fh);
+    closedir($fh);
     wantarray ? @pid : \@pid;
 }
 sub get_pids_by_pgids {
