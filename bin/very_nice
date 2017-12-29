@@ -222,7 +222,7 @@ sub send_signal {
     }
     my @result; my $error_found;
     for my $id (keys %ids) {
-        $! = undef;
+        local $! = undef;
         my $r = kill($signal => $id) or delete $ids{$id};
         $error_found ||= $!;
         push @result, "$id -> r=$r" . ($! ? " (\$!=$!)" : "");
