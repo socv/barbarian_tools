@@ -236,7 +236,7 @@ sub send_signal {
             print_debug($mesg);
         }
     }
-};
+}
 my $delay_active   = $opt_cycle * $opt_rate;
 my $delay_inactive_default = $opt_cycle - $delay_active;
 my %last_cpu_time = map { $_ => read_cpu_time($_) } keys %ids;
