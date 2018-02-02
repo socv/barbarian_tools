@@ -1,4 +1,4 @@
-#!/usr/bin/perl -TW
+#!/usr/bin/env perl -TW
 
 # * 類似のツール
 #  * https://github.com/opsengine/cpulimit
