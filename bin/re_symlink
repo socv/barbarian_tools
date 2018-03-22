@@ -1,0 +1,30 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+for(@ARGV) {
+    re_symlink($_);
+}
+
+sub re_symlink {
+    my $src = shift;
+    unless(lstat($src)) {
+        warn "WARNING: '$src': not found\n";
+        return;
+    }
+    unless(-l _) {
+        warn "WARNING: '$src': is not symlink type\n";
+        return;
+    }
+
+    my $target = readlink($src);
+    if(!defined $target) {
+        warn "WARNING: can not read link '$src' : $!";
+        return;
+    }
+    unlink($src)
+      or die "ERROR: can not delete file '$src' : $!";
+
+    symlink($target, $src)
+      or die "ERROR: symlink '$target' <= '$src' : $!";
+}
