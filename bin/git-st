@@ -23,7 +23,7 @@ while (<$fh>) {
     chomp;
     my $line_no_color = ($_ =~ s/^$RE_COLORS//sr);
     $line_no_color =~ s/$RE_COLORS//s;
-    my $current_color = $&;
+    my $current_color = $& // "";
     $line_no_color =~ s/$RE_COLORS//gs;
     if ($line_no_color =~ /\A \S/sx) {
         $is_untracked_region = ($line_no_color =~ /\A Untracked \s files: \z/sx);
