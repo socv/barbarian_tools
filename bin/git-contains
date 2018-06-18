@@ -1,4 +1,6 @@
 #!/usr/bin/env perl
 use strict;
 use warnings;
-exec("git", "branch", "--all", "--contains", @ARGV);
+my @c = ("git", "branch", "--all", "--contains", @ARGV);
+print STDERR "@c\n";
+exec(@c);
