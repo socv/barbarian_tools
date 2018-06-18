@@ -1,4 +1,72 @@
 #!/usr/bin/env perl
 use strict;
 use warnings;
-exec("git", "st", @ARGV);
+no warnings "exec";
+
+my $fh;
+if (!open($fh, "-|")) {
+    exec("git", "status", @ARGV);
+    exit;
+}
+
+my $color_untracked = "\e[m\e[35;1m";
+my $color_reset     = "\e[m";
+
+my $RE_COLOR           = qr{ \e\[ [\d;]* m }xs;
+my $RE_COLORS          = qr{ $RE_COLOR + }xs;
+my $RE_COLORS_OR_EMPTY = qr{ $RE_COLOR * }xs;
+
+my $is_untracked_region;
+my @files_untracked;
+
+while (<$fh>) {
+    chomp;
+    my $line_no_color = ($_ =~ s/^$RE_COLORS//sr);
+    $line_no_color =~ s/$RE_COLORS//s;
+    my $current_color = $& // "";
+    $line_no_color =~ s/$RE_COLORS//gs;
+    if ($line_no_color =~ /\A \S/sx) {
+        $is_untracked_region = ($line_no_color =~ /\A Untracked \s files: \z/sx);
+        print "$_\n";
+        next;
+    }
+    if ($is_untracked_region) {
+        if ($line_no_color =~ s{^\t}{}) {
+            $color_untracked = $current_color;
+            push @files_untracked, $line_no_color;
+            next;
+        }
+    }
+    flush_files_untracked();
+    print "$_\n";
+}
+close($fh);
+
+
+sub flush_files_untracked {
+    return unless @files_untracked;
+    local $_ = undef;
+    my $re_left = qr/(?<perm>\S{10,}) \s+ (?<hardlink>\d+) \s+ (?<owner>\S+) \s+ (?<group>\S+) \s+ (?<size>\d+)/sx;
+
+    my $fh_ls;
+    if (!open($fh_ls, "-|")) {
+        if (!open(STDIN, "-|")) {
+            print map { "$_\0" } @files_untracked;
+            exit;
+        }
+        exec("xargs", "-0", "ls", "-ald", "--full-time");
+        exit 99;
+    }
+    while (<$fh_ls>) {
+        chomp;
+        s/^
+          (?<left> $re_left) \s+ (?<ymd>\d\d\d\d-\d\d-\d\d) \s (?<hms>\d\d:\d\d:\d\d) \.\d+ \s+ [-+]\d\d\d\d
+          /$+{left} $+{ymd}T$+{hms}/sx;
+        print "\t" . $color_untracked . $_ . $color_reset . "\n";
+    }
+    close($fh_ls) or do {
+        ($?) and die "child process error (" . (($? & 0xff) ? "signal=" . ($? & 0xff) : "exit=" . ($? >> 8)) . ")";
+        die "ERROR: close: $!";
+    };
+    @files_untracked = ();
+}
