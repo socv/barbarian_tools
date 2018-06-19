@@ -1,0 +1,106 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use POSIX       ();
+use File::Spec  ();
+use Cwd         ();
+use Time::HiRes ();
+my $cwd    = Cwd::getcwd();
+my $myname = ($0 =~ s{.*/(.*)}{$1\[$$\]}sr);
+
+my @target = (scalar(@ARGV) ? @ARGV : '.');
+
+eval {
+    for my $target (@target) {
+        $target =~ s{/*$}{/}s;
+        eval {
+            (-e $target) or die "directory not found\n";
+            (-d $target) or die "is not directory\n";
+            (-r $target) or die "is not readable\n";
+            (-x $target) or die "is not executable\n";
+
+            my $abs_path = Cwd::abs_path($target);
+            $abs_path // die "abs_path('$target') is undef";
+            $abs_path =~ s{/*$}{/}s;
+
+            my $found;
+            for (my $dir = $abs_path; length($dir) > 1;) {
+                if (-e "$dir.git") {
+                    $found = "$dir.git";
+                    (-r $found) or die "'$found' is not readable\n";
+                    last;
+                }
+                $dir =~ s{/+\z}{}s;
+                $dir =~ s{[^/]+\z}{}s;
+            }
+            if (!$found) {
+                die "'.git' not found\n";
+            }
+        };
+        if ($@) {
+            die "'$target' : $@";
+        }
+    }
+};
+if ($@) {
+    die "$myname: (cwd=$cwd): ERROR: $@";
+}
+
+my %children;
+for my $target (@target) {
+    $target =~ s{/*$}{/}s;
+    my $pid = fork;
+    (defined $pid) or die "fork: $!";
+    if (!$pid) {
+        child_proc($target);
+    }
+    $children{$pid} = $target;
+    Time::HiRes::sleep(0.1);
+}
+
+while (keys %children) {
+    my $pid = wait;
+    (defined $pid) or die "wait: $!";
+    my $target = delete $children{$pid};
+}
+
+sub child_proc {
+    my $target     = shift;                       ## directory
+    my $begin_time = Time::HiRes::gettimeofday();
+
+    chdir $target or die "chdir: '$target': $!";
+    my @command = qw(git pull);
+    print "$myname: (cwd=" . Cwd::getcwd() . ") exec: @command\n";
+
+    my $fh_git;
+    if (!open($fh_git, "-|")) {
+        open(STDERR, ">&", *STDOUT) or die "ERROR: dup2: $!";
+        my $devnull_path = File::Spec->devnull;
+        open(STDIN, "<", $devnull_path) or die "ERROR: open: '$devnull_path' : $!";
+
+        exec @command;
+        exit 1;
+    }
+
+    my $buffer = do {
+        local $/ = undef;
+        <$fh_git>;
+    };
+    $buffer =~ s{\n?\z}{\n}s if length $buffer;
+
+    my $dummy    = close($fh_git);
+    my $end_time = Time::HiRes::gettimeofday();
+
+    my $exit_status    = 0;
+    my $status_message = "success";
+    if ($?) {
+        my $sig               = ($? & 0xff);
+        my $child_exit_status = ($? >> 8);
+        $exit_status = $child_exit_status || 1;
+        $status_message = ($sig ? "sig=$sig" : "exit=$child_exit_status");
+    }
+    my $elapsed = sprintf("%.3f[s]", $end_time - $begin_time);
+
+    print $buffer . "$myname: $elapsed: end ($status_message) : $target\n";
+    exit $exit_status;
+}
