@@ -1,0 +1,21 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use POSIX ();
+
+my @command = (
+    "git", "show",
+    "--date=iso-local",
+    "--pretty=format:%H %cd %d",
+    @ARGV
+);
+
+print STDERR "RUN \$ " . join(" ", map { encode_elem($_) } @command). "\n" if POSIX::isatty(*STDERR);
+exec(@command);
+
+
+sub encode_elem {
+    my $s = shift;
+    $s =~ /^[-\w\/=]+$/ or $s = "'$s'";
+    $s;
+}
