@@ -169,7 +169,7 @@ sub run_script {
     my $stop_watch_file = RunPartsX::StopWatch->new;
     my $child_proc;
     if (!open($child_proc, "-|")) {
-        open(STDERR, ">&STDOUT") or warn "dup2: $!";
+        open(STDERR, '>&', *STDOUT) or warn "dup2: $!";
         exec($path);
         exit 1;
     }
@@ -205,7 +205,7 @@ sub do_each_dir {
     my @files = grep { $_ ne "." && $_ ne ".." } sort readdir($dir_fh);
     closedir($dir_fh);
 
-    open(my $fh_lock, $dir) or die "$0: WARNING: open '$dir': $!\n";
+    open(my $fh_lock, "<", $dir) or die "$0: WARNING: open '$dir': $!\n";
     my $time_before_lock = Time::HiRes::gettimeofday();
     my $error_lock = take_flock($fh_lock, $dir, $opt_lock_timeout);
     my $elapsed_lock = sprintf("%.3f", Time::HiRes::gettimeofday() - $time_before_lock);
