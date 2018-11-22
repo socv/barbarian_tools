@@ -172,7 +172,7 @@ sub run_script {
     }
     local $/ = undef;
     my $output = <$child_proc>;
-    close($child_proc);
+    close($child_proc) or die "ERROR: close: $!";
 
     my ($exit_status, $signal) = ($? >> 8, $? & 0xff);
     my $status = "";
