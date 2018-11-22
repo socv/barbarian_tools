@@ -16,6 +16,7 @@ my $opt_no_ionice;
 my $opt_nice = 1;
 my $opt_sleep_1;
 my $opt_sleep_2;
+my $opt_lock_timeout = 30;
 
 Getopt::Long::GetOptions(
     "h|help"           => \$opt_help,
@@ -25,6 +26,7 @@ Getopt::Long::GetOptions(
     "I|no-ionice"        => \$opt_no_ionice,
     "s|sleep-first=s"  => \$opt_sleep_1,
     "S|sleep-second=s" => \$opt_sleep_2,
+    "lock-timeout=i" => \$opt_lock_timeout,
 ) or die "fatal error\n";
 
 
@@ -200,7 +202,7 @@ sub do_each_dir {
 
     open(my $fh_lock, $dir) or die "$0: WARNING: open '$dir': $!\n";
     my $time_before_lock = Time::HiRes::gettimeofday();
-    my $error_lock = take_flock($fh_lock, $dir, 30);
+    my $error_lock = take_flock($fh_lock, $dir, $opt_lock_timeout);
     my $elapsed_lock = sprintf("%.3f", Time::HiRes::gettimeofday() - $time_before_lock);
     $error_lock and die "ERROR: (elapsed=$elapsed_lock\[s\]) lock '$dir' : $error_lock\n";
 
