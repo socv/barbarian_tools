@@ -156,12 +156,12 @@ sub run_script {
         $sleep += rand($sleep_max - $sleep_min + 1) if $sleep_max > $sleep_min;
         $sleep = sprintf("%.1f", $sleep);
         if ($sleep > 0) {
-            print_log("run-parts-x($dir)", LOG_NOTICE, "sleep ($sleep\[s]) ...");
+            print_log("run-parts-x($dir)", LOG_NOTICE, "[$index] sleep ($sleep\[s]) ...");
             Time::HiRes::sleep($sleep);
         }
     }
 
-    print_log("run-parts-x($dir)", LOG_NOTICE, "starting $fn");
+    print_log("run-parts-x($dir)", LOG_NOTICE, "[$index] starting $fn");
 
     my $stop_watch_file = RunPartsX::StopWatch->new;
     my $child_proc;
@@ -190,7 +190,7 @@ sub run_script {
           . "$output\n"
           . "}}}\n";
     }
-    print_log("run-parts-x($dir)", ($status ? LOG_ERR : LOG_NOTICE), "finished $fn$status $stop_watch_file");
+    print_log("run-parts-x($dir)", ($status ? LOG_ERR : LOG_NOTICE), "[$index] finished $fn$status $stop_watch_file");
 }
 sub do_each_dir {
     my $dir = shift;
