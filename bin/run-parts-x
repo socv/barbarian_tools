@@ -36,7 +36,7 @@ Getopt::Long::GetOptions(
 $SIG{__WARN__} = \&print_warn_message;
 sub print_warn_message {
     chomp (my $s = shift);
-    print STDERR "$SELF_NAME: " . $s . "\n";
+    print {*STDERR} "$SELF_NAME: " . $s . "\n";
 }
 
 
