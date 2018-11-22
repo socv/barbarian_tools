@@ -249,6 +249,7 @@ sub print_log {
     my ($ident, $level, $message) = @_;
     chomp $message;
     if($isatty) {
+        ## no critic (ProhibitMagicNumbers)
         my $time = Time::HiRes::gettimeofday();
         print $isatty POSIX::strftime("%Y-%m-%dT%H:%M:%S", localtime int($time))
           . sprintf(".%03d", ($time - int($time)) * 1000)
