@@ -81,8 +81,8 @@ sub parse_time_range {
     my ($arg, $name) = @_;
     my ($min, $max)
       = (!defined $arg) ? (undef, undef)
-      : ($arg =~ m{^(\d+)$}) ? (0, $1)
-      : ($arg =~ m{^(\d+)\.\.(\d+)$}) ? ($1, $2)
+      : ($arg =~ m{^(\d+)$}s) ? (0, $1)
+      : ($arg =~ m{^(\d+)\.\.(\d+)$}s) ? ($1, $2)
       :                                 die "ERROR: invalid format $name=$arg\n";
     ($min, $max);
 }
@@ -196,7 +196,7 @@ sub run_script {
 }
 sub do_each_dir {
     my $dir = shift;
-    $dir =~ s{/*$}{/};
+    $dir =~ s{/*$}{/}s;
 
     opendir(my $dir_fh, $dir) or die "$0: WARNING: opendir '$dir': $!\n";
     my @files = grep { $_ ne "." && $_ ne ".." } sort readdir($dir_fh);
@@ -212,8 +212,8 @@ sub do_each_dir {
     for my $fn (@files) {
         my $path = $dir . $fn;
         next unless -f $path;
-        next if $fn =~ m{\.(cfsaved|rpmsave|rpmorig|rpmnew|swp)$};
-        next if $fn =~ m{(\,v|\,|\~)$};
+        next if $fn =~ m{\.(cfsaved|rpmsave|rpmorig|rpmnew|swp)$}s;
+        next if $fn =~ m{(\,v|\,|\~)$}s;
 
         if ($opt_list) {
             printf("%s %s\n", ((-x $path) ? "+x" : "-x"), $path);
