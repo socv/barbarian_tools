@@ -190,7 +190,9 @@ sub run_script {
           . "$output\n"
           . "}}}\n";
     }
-    print_log("run-parts-x($dir)", ($status ? LOG_ERR : LOG_NOTICE), "[$index] finished $fn$status $stop_watch_file");
+
+    my $log_level_finish = ($status ? LOG_ERR : LOG_NOTICE);
+    print_log("run-parts-x($dir)", $log_level_finish, "[$index] finished $fn$status $stop_watch_file");
 }
 sub do_each_dir {
     my $dir = shift;
