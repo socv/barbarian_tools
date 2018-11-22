@@ -199,8 +199,10 @@ sub do_each_dir {
     closedir($dir_fh);
 
     open(my $fh_lock, $dir) or die "$0: WARNING: open '$dir': $!\n";
+    my $time_before_lock = Time::HiRes::gettimeofday();
     my $error_lock = take_flock($fh_lock, $dir, 30);
-    $error_lock and die "ERROR: lock '$dir' : $error_lock\n";
+    my $elapsed_lock = sprintf("%.3f", Time::HiRes::gettimeofday() - $time_before_lock);
+    $error_lock and die "ERROR: (elapsed=$elapsed_lock\[s\]) lock '$dir' : $error_lock\n";
 
     my @scripts;
     for my $fn (@files) {
