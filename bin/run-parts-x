@@ -19,7 +19,7 @@ my $opt_no_ionice;
 my $opt_nice = 1;
 my $opt_sleep_1;
 my $opt_sleep_2;
-my $opt_lock_timeout = 50;
+my $opt_lock_timeout = 5 * 60;
 
 Getopt::Long::GetOptions(
     "h|help"           => \$opt_help,
