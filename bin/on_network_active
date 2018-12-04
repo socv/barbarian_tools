@@ -1,0 +1,4 @@
+#!/bin/bash
+set -eu
+
+ping -q -w 1 -c1 www.google.com > /dev/null
