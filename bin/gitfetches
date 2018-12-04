@@ -1,0 +1,52 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use Cwd   ();
+use POSIX ();
+use Time::HiRes ();
+use List::Util  ();
+
+my $isatty = POSIX::isatty(*STDERR);
+$| = 1;
+
+sub print_info {
+    my $mesg = shift;
+    return unless $isatty;
+    print $mesg or die "ERROR: print: $!";
+}
+
+my @dirs = map { Cwd::abs_path($_) } @ARGV;
+
+@dirs = map {
+    my $dir = $_;
+    $dir =~ s{/\.git\z}{}s;
+    $dir =~ s{\/*\z}{/}s;
+    $dir;
+} @dirs;
+
+my $max_length_of_dir = List::Util::max(map { length $_ } @dirs);
+
+for my $dir (@dirs) {
+    my $git_dir = $dir . ".git";
+    unless (-d $git_dir) {
+        warn "$0: WARNING: directory not found '$$git_dir'\n";
+        next;
+    }
+    if (!chdir($dir)) {
+        warn "$0: WARNING: chdir '$dir': $!";
+        next;
+    }
+
+    print_info(sprintf("%-${max_length_of_dir}s : ...", $dir));
+    my $time_of_begin = Time::HiRes::gettimeofday;
+    if ($isatty) {
+        ## TODO
+        system("git fetch -q");
+    }
+    else {
+        ## TODO
+        system("git fetch -q");
+    }
+    my $time_of_elapsed = sprintf("%.6f", Time::HiRes::gettimeofday - $time_of_begin);
+    print_info(" (elapsed=$time_of_elapsed\[s])\n");
+}
