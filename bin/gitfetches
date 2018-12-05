@@ -28,6 +28,8 @@ my $max_length_of_dir = List::Util::max(map { length $_ } @dirs);
 
 my $total_time_of_begin = Time::HiRes::gettimeofday;
 for my $dir (@dirs) {
+    print_info(sprintf("%-${max_length_of_dir}s : ...", $dir));
+
     my $git_dir = $dir . ".git";
     unless (-d $git_dir) {
         warn "$0: WARNING: directory not found '$$git_dir'\n";
@@ -38,7 +40,6 @@ for my $dir (@dirs) {
         next;
     }
 
-    print_info(sprintf("%-${max_length_of_dir}s : ...", $dir));
     my $time_of_begin = Time::HiRes::gettimeofday;
     if ($isatty) {
         ## TODO
