@@ -26,6 +26,7 @@ my @dirs = map { Cwd::abs_path($_) } @ARGV;
 
 my $max_length_of_dir = List::Util::max(map { length $_ } @dirs);
 
+my $total_time_of_begin = Time::HiRes::gettimeofday;
 for my $dir (@dirs) {
     my $git_dir = $dir . ".git";
     unless (-d $git_dir) {
@@ -50,3 +51,5 @@ for my $dir (@dirs) {
     my $time_of_elapsed = sprintf("%.6f", Time::HiRes::gettimeofday - $time_of_begin);
     print_info(" (elapsed=$time_of_elapsed\[s])\n");
 }
+my $total_time_of_elapsed = sprintf("%.6f", Time::HiRes::gettimeofday - $total_time_of_begin);
+print_info("total (elapsed=$total_time_of_elapsed\[s])\n");
