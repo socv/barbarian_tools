@@ -1,21 +1,162 @@
 #!/usr/bin/env perl
 use strict;
 use warnings;
+use Cwd   ();
+use Carp  ();
 use POSIX ();
+use Getopt::Long qw(:config posix_default no_ignore_case gnu_getopt require_order);
 
-my @command = (
-    "git", "show",
-    "--date=iso-local",
-    "--pretty=format:%H %cd %d",
-    @ARGV
+my $option_quiet;
+my $option_verbose;
+Getopt::Long::GetOptions(
+    "q|quiet"   => \$option_quiet,
+    "v|verbose" => \$option_verbose,
+) or die ".";
+
+my $cwd_abbrev    = (Cwd::getcwd() =~ s{/+\z}{}r =~ s{.*/}{}r);
+my $pseudo_prompt = "[$cwd_abbrev/]\$";
+
+my $terminal =
+  POSIX::isatty(*STDERR) ? *STDERR :
+  POSIX::isatty(*STDOUT) ? *STDOUT :
+  undef;
+
+sub print_info {
+    my $mesg = shift;
+    return if $option_quiet;
+    return unless $option_verbose || $terminal;
+    chomp $mesg;
+    print { $terminal || *STDERR } "$mesg\n";
+}
+
+run_external(
+    command => [
+        "git",
+        "-c", "pager.show=cat",
+        "show",
+        "--no-patch",
+        "--date=iso-strict",
+        "--pretty=format:%H %cd %d",
+        @ARGV,
+      ]
+);
+print "\n";
+
+my $target_hash = command_to_string(
+    command => ["git", "show", "--no-patch", "--pretty=format:%H", @ARGV],
+    re_valid => qr/\A[0-9a-f]{40}\z/s,
+    quiet    => 1,
 );
 
-print STDERR "RUN \$ " . join(" ", map { encode_elem($_) } @command). "\n" if POSIX::isatty(*STDERR);
-exec(@command);
+if (defined $target_hash) {
+    my $result = $target_hash;
 
+    my $target_branch = command_to_string(
+        command => ["git", "describe", "--contains", "--all", $target_hash],
+        re_valid => qr/\A\S+\z/s,
+    );
+
+    my $target = $target_branch // $target_hash;
+
+    $result .= " $target";
+
+    my $hash_of_head = command_to_string(
+        command => ["git", "show", "--no-patch", "--pretty=format:%H", "HEAD"],
+        re_valid => qr/\A[0-9a-f]{40}\z/s,
+        quiet    => 1,
+    );
+
+    if ($target_hash ne $hash_of_head) {
+        my $head_branch_name = eval {
+            command_to_string(
+                command => ["git", "describe", "--contains", "--all", "HEAD"],
+                re_valid => qr/\A\S+\z/s,
+                # quiet => 1,
+            );
+        } || "HEAD";
+
+        my $left_right = command_to_string(
+            command => ["git", "rev-list", "--count", "--left-right", "$head_branch_name...$target"],
+            re_valid => qr/\A(?<left>\d+)\s+(?<right>\d+)\z/s,
+        );
+        if ($left_right !~ m/\A(?<left>\d+)\s+(?<right>\d+)\z/s) {
+            warn "WARNING: invalid result: left_right={{{$left_right}}}";
+            $left_right = undef;
+        }
+        else {
+            my ($left, $right) = @+{ "left", "right" };
+            $result .= " == HEAD";
+            $result .= "+$right" if $right;
+            $result .= "-$left" if $left;
+        }
+    }
+    print "\n$result\n";
+}
+
+
+sub run_external {
+    my %arg           = @_;
+    my $command       = delete $arg{command} // Carp::confess("argument 'command' is required");
+    my $quiet_command = delete $arg{quiet_command};
+    (!%arg) or Carp::confess("Unknown argument (" . join(",", keys %arg) . ")");
+
+    my @command         = @$command;
+    my $command_encoded = command_array_to_string(@command);
+    if (!$quiet_command) {
+        print_info("\n$pseudo_prompt $command_encoded");
+    }
+    system(@command);
+    if ($?) {
+        my $status = "";
+        $status .= "(signal=" . ($? & 0xff) . ")" if $? & 0xff;
+        $status .= "(exit_status=" . ($? >> 8) . ")" if $? >> 8;
+        die "ERROR: $status: $command_encoded\n";
+    }
+}
+
+sub command_array_to_string {
+    my @command = @_;
+    join(" ", map { encode_elem($_) } @command)
+}
 
 sub encode_elem {
     my $s = shift;
-    $s =~ /^[-\w\/=]+$/ or $s = "'$s'";
+    $s =~ /\A[-\w\/=]+\z/s or $s = "'$s'";
     $s;
 }
+
+sub command_to_string {
+    my %arg           = @_;
+    my $command       = delete $arg{command} // Carp::confess("argument 'command' is required");
+    my $re_valid      = delete $arg{re_valid} // Carp::confess("argument 're_valid' is required");
+    my $quiet_result  = delete $arg{quiet_result} // 0;
+    my $quiet_command = delete $arg{quiet_command} // 0;
+    my $quiet         = delete $arg{quiet} // 0;
+
+    (!%arg) or Carp::confess("Unknown argument (" . join(",", keys %arg) . ")");
+
+    if ($quiet) {
+        $quiet_result = $quiet_command = 1;
+    }
+
+    my @command = @$command;
+    my $pipe;
+    if (!open($pipe, "-|")) {
+        run_external(command => [@command], quiet_command => $quiet_command);
+        exit;
+    }
+    my $string = do { local $/ = undef; <$pipe> };
+    close($pipe);
+    chomp $string;
+    if (!$quiet_result) {
+        print_info($string);
+    }
+
+    if ($string !~ $re_valid) {
+        die "invalid result: command=" . command_array_to_string(@command)
+          . "\n{{{$string}}}";
+        $string = undef;
+    }
+    return $string;
+}
+
