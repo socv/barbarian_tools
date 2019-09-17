@@ -6,7 +6,10 @@ use POSIX ();
 use Time::HiRes ();
 use List::Util  ();
 
-my $isatty = POSIX::isatty(*STDERR);
+my $isatty = (
+    POSIX::isatty(*STDERR) ? *STDERR :
+    undef
+);
 $| = 1;
 
 sub print_info {
