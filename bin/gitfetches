@@ -7,6 +7,7 @@ use Time::HiRes ();
 use List::Util  ();
 
 my $isatty = (
+    POSIX::isatty(*STDOUT) ? *STDOUT :
     POSIX::isatty(*STDERR) ? *STDERR :
     undef
 );
