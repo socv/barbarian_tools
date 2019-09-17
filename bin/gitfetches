@@ -34,9 +34,9 @@ Getopt::Long::GetOptions(
   or die "ERROR: invalid value : --max-procs=$opt_max_procs";
 
 sub print_info {
-    my $mesg = shift;
+    my $message = shift;
     return unless $isatty;
-    print $mesg or die "ERROR: print: $!";
+    print $message or die "ERROR: print: $!";
 }
 
 my @dirs = map { Cwd::abs_path($_) } @ARGV;
