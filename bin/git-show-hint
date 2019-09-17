@@ -36,7 +36,15 @@ run_external(
         "show",
         "--no-patch",
         "--date=iso-strict",
-        "--pretty=format:%H %cd %d",
+        "--pretty=format:Commit: %h %H"
+        . "%nRef-Names: %d"
+        . "%nCommitter: %cd \"%cn\" <%ce>"
+        . "%nAuthor:    %ad \"%an\" <%ae>"
+        . "%nSanitized-Subject: %f"
+        # . "%nSubject: %s"
+        . "%nSubject-Body: {{{%n%B}}}"
+        # . "%nBody: %b"
+        ,
         @ARGV,
       ]
 );
