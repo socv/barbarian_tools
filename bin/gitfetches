@@ -63,10 +63,13 @@ for (@ARGV) {
 
 my $max_length_of_dir = List::Util::max(map { length $_ } @dirs);
 
+my $sum_elapsed = 0;
 my $total_time_of_begin = Time::HiRes::gettimeofday;
+my %children;
 for my $dir (@dirs) {
-    print_info(sprintf("%-${max_length_of_dir}s : ...", $dir));
-
+    while(%children >= $opt_max_procs) {
+        wait_one_child();
+    }
     my $git_dir = $dir . ".git";
     unless (-d $git_dir) {
         warn "$0: WARNING: directory not found '$$git_dir'\n";
@@ -78,19 +81,51 @@ for my $dir (@dirs) {
     }
 
     my $time_of_begin = Time::HiRes::gettimeofday;
-    if ($isatty) {
-        ## TODO
-        system("git fetch -q");
+
+    my $pid = fork;
+    if(!$pid) {
+        exec("git fetch -q");
+        exit 1;
     }
-    else {
-        ## TODO
-        system("git fetch -q");
-    }
-    my $time_of_elapsed = sprintf("%.6f", Time::HiRes::gettimeofday - $time_of_begin);
-    print_info(" (elapsed=$time_of_elapsed\[s])\n");
+    $children{$pid} = +{ dir => $dir, time_of_begin => $time_of_begin };
+    print_info(sprintf("%-${max_length_of_dir}s : [pid=$pid]\n", $dir));
 }
+
+while (%children) {
+    wait_one_child();
+}
+print_info(sprintf("sum (elapsed=%.6f[s])\n", $sum_elapsed));
+
+
 my $total_time_of_elapsed = sprintf("%.6f", Time::HiRes::gettimeofday - $total_time_of_begin);
 print_info("total (elapsed=$total_time_of_elapsed\[s])\n");
+print_info("term_size_width=$term_size_width\n");
+
+sub wait_one_child {
+    my $procs_list = join(", ", sort map {
+        my $pid = $_;
+        my $s = $children{$pid}->{dir};
+        $s =~ s{.*/([^/]+)/+$}{$1};
+        "$pid:$s";
+    } sort { $a <=> $b } keys %children);
+    print_info(
+        sprintf("%-${term_size_width}.${term_size_width}s\r", "more " . scalar(keys %children) . " procs: $procs_list")
+    );
+    my $killed_pid = waitpid(-1 , 0);
+    print_info("\e[K");
+    if($killed_pid < 0) {
+        warn "waitpid return-value = $killed_pid : $!";
+        last;
+    }
+    my $hash = delete $children{$killed_pid};
+    my ($dir, $time_of_begin) = @{$hash}{qw/dir time_of_begin/};
+    my $elapsed = Time::HiRes::gettimeofday - $time_of_begin;
+    print_info(
+        sprintf("%-${max_length_of_dir}s : (elapsed=%.6f[s]) [pid=$killed_pid]\n",
+            $dir, $elapsed)
+    );
+    $sum_elapsed += $elapsed;
+}
 
 sub get_n_cpu {
     my @processor = split(/\n/, `cat /proc/cpuinfo | grep ^processor`);
