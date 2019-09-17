@@ -37,21 +37,21 @@ run_external(
         "--no-patch",
         "--date=iso-strict",
         "--pretty=format:Commit: %h %H"
-        . "%nRef-Names: %d"
-        . "%nCommitter: %cd \"%cn\" <%ce>"
-        . "%nAuthor:    %ad \"%an\" <%ae>"
-        . "%nSanitized-Subject: %f"
-        # . "%nSubject: %s"
-        . "%nSubject-Body: {{{%n%B}}}"
-        # . "%nBody: %b"
+          . "%nRef-Names: %d"
+          . "%nCommitter: %cd \"%cn\" <%ce>"
+          . "%nAuthor:    %ad \"%an\" <%ae>"
+          . "%nSanitized-Subject: %f"
+          # . "%nSubject: %s"
+          . "%nSubject-Body: {{{%n%B}}}"
+          # . "%nBody: %b"
         ,
         @ARGV,
-      ]
+    ],
 );
 print "\n";
 
 my $target_hash = command_to_string(
-    command => ["git", "show", "--no-patch", "--pretty=format:%H", @ARGV],
+    command  => ["git", "show", "--no-patch", "--pretty=format:%H", @ARGV],
     re_valid => qr/\A[0-9a-f]{40}\z/s,
     quiet    => 1,
 );
@@ -60,7 +60,7 @@ if (defined $target_hash) {
     my $result = $target_hash;
 
     my $target_branch = command_to_string(
-        command => ["git", "describe", "--contains", "--all", $target_hash],
+        command  => ["git", "describe", "--contains", "--all", $target_hash],
         re_valid => qr/\A\S+\z/s,
     );
 
@@ -69,7 +69,7 @@ if (defined $target_hash) {
     $result .= " $target";
 
     my $hash_of_head = command_to_string(
-        command => ["git", "show", "--no-patch", "--pretty=format:%H", "HEAD"],
+        command  => ["git", "show", "--no-patch", "--pretty=format:%H", "HEAD"],
         re_valid => qr/\A[0-9a-f]{40}\z/s,
         quiet    => 1,
     );
@@ -77,14 +77,14 @@ if (defined $target_hash) {
     if ($target_hash ne $hash_of_head) {
         my $head_branch_name = eval {
             command_to_string(
-                command => ["git", "describe", "--contains", "--all", "HEAD"],
+                command  => ["git", "describe", "--contains", "--all", "HEAD"],
                 re_valid => qr/\A\S+\z/s,
                 # quiet => 1,
             );
         } || "HEAD";
 
         my $left_right = command_to_string(
-            command => ["git", "rev-list", "--count", "--left-right", "$head_branch_name...$target"],
+            command  => ["git", "rev-list", "--count", "--left-right", "$head_branch_name...$target"],
             re_valid => qr/\A(?<left>\d+)\s+(?<right>\d+)\z/s,
         );
         if ($left_right !~ m/\A(?<left>\d+)\s+(?<right>\d+)\z/s) {
@@ -116,15 +116,15 @@ sub run_external {
     system(@command);
     if ($?) {
         my $status = "";
-        $status .= "(signal=" . ($? & 0xff) . ")" if $? & 0xff;
-        $status .= "(exit_status=" . ($? >> 8) . ")" if $? >> 8;
+        $status .= "(signal=" .      ($? & 0xff) . ")" if $? & 0xff;
+        $status .= "(exit_status=" . ($? >> 8) . ")"   if $? >> 8;
         die "ERROR: $status: $command_encoded\n";
     }
 }
 
 sub command_array_to_string {
     my @command = @_;
-    join(" ", map { encode_elem($_) } @command)
+    join(" ", map { encode_elem($_) } @command);
 }
 
 sub encode_elem {
