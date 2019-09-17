@@ -13,6 +13,15 @@ my $isatty = (
 );
 $| = 1;
 
+my $term_size_width = eval {
+    if($isatty) {
+        require Term::Size::Perl;
+        my ($n_cols,$n_rows) = Term::Size::Perl::chars($isatty);
+        $n_cols;
+    }
+} || 80;
+warn $@ if $@;
+
 sub print_info {
     my $mesg = shift;
     return unless $isatty;
