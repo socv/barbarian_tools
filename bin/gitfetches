@@ -95,3 +95,20 @@ sub get_n_cpu {
     my @processor = split(/\n/, `cat /proc/cpuinfo | grep ^processor`);
     return scalar(@processor) || 1;
 }
+
+sub print_usage {
+    my $message = shift;
+    my $device = shift // *STDERR;
+    if($message) {
+        chomp $message;
+        print {$device} "$message\n";
+    }
+    print {$device} "Usage: $0 DIR...\n";
+    exit 1;
+}
+sub usage {
+    my $message = shift;
+    my $device = shift // *STDERR;
+    print_usage($message, $device);
+    exit 1;
+}
