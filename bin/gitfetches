@@ -36,7 +36,7 @@ Getopt::Long::GetOptions(
 sub print_info {
     my $message = shift;
     return unless $isatty;
-    print $message or die "ERROR: print: $!";
+    print {$isatty} $message or die "ERROR: print: $!";
 }
 
 my @dirs = map { Cwd::abs_path($_) } @ARGV;
