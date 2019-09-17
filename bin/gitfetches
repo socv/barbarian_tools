@@ -5,6 +5,7 @@ use Cwd   ();
 use POSIX ();
 use Time::HiRes ();
 use List::Util  ();
+use Getopt::Long qw(:config posix_default no_ignore_case gnu_getopt);
 
 my $isatty = (
     POSIX::isatty(*STDOUT) ? *STDOUT :
