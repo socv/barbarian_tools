@@ -23,6 +23,16 @@ my $term_size_width = eval {
 } || 80;
 warn $@ if $@;
 
+
+my $opt_max_procs = get_n_cpu();
+
+Getopt::Long::GetOptions(
+    "P|max-procs=i" => \$opt_max_procs,
+) or die "fatal";
+
+(int($opt_max_procs) == $opt_max_procs) && $opt_max_procs >= 1
+  or die "ERROR: invalid value : --max-procs=$opt_max_procs";
+
 sub print_info {
     my $mesg = shift;
     return unless $isatty;
@@ -68,3 +78,8 @@ for my $dir (@dirs) {
 }
 my $total_time_of_elapsed = sprintf("%.6f", Time::HiRes::gettimeofday - $total_time_of_begin);
 print_info("total (elapsed=$total_time_of_elapsed\[s])\n");
+
+sub get_n_cpu {
+    my @processor = split(/\n/, `cat /proc/cpuinfo | grep ^processor`);
+    return scalar(@processor) || 1;
+}
