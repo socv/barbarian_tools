@@ -40,14 +40,25 @@ sub print_info {
     print {$isatty} "$message\n" or die "ERROR: print: $!";
 }
 
-my @dirs = map { Cwd::abs_path($_) } @ARGV;
+my @dirs;
+for (@ARGV) {
+    my $dir = Cwd::abs_path($_);
+    if($dir) {
+        $dir =~ s{/\.git(?:/.*?)\z}{}s;
+        $dir =~ s{\/*\z}{/}s;
+        if(-d $dir) {
+            push @dirs, $dir;
+        }
+        else {
+            system("ls", "-ald", "--", $dir);
+            warn "$_: ERROR: is not directory";
+        }
+    }
+    else {
+        warn "$_: ERROR: not found";
+    }
+}
 
-@dirs = map {
-    my $dir = $_;
-    $dir =~ s{/\.git\z}{}s;
-    $dir =~ s{\/*\z}{/}s;
-    $dir;
-} @dirs;
 
 my $max_length_of_dir = List::Util::max(map { length $_ } @dirs);
 
