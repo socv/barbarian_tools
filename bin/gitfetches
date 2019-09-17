@@ -59,6 +59,7 @@ for (@ARGV) {
     }
 }
 
+(@dirs) or usage();
 
 my $max_length_of_dir = List::Util::max(map { length $_ } @dirs);
 
