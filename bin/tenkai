@@ -40,6 +40,12 @@ sub tenkai {
             exec_("7za", "x", $pack);
         };
     }
+    elsif($pack =~ m{([^/]+)\.rar\z}s) {
+        $base = $1;
+        $unpack_func = sub {
+            exec_("unar", $pack);
+        };
+    }
     elsif($pack =~ m{([^/]+)\.rpm\z}s) {
         $base = $1;
         $unpack_func = sub {
