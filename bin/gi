@@ -1,0 +1,18 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+my $name = ($0 =~ s{.*/}{}rs);
+
+warn "$name\[$$]: start: $0 @ARGV\n";
+
+if(!@ARGV) {
+    die "$name: command not found...\n";
+}
+if($ARGV[0] =~ s{\A(t)(.)}{$2}s) {
+    my $command = $name . $1;
+    warn "$name\[$$]: RUN: $command @ARGV\n";
+    exec($command, @ARGV);
+}
+
+die "$name: command not found...\n";
