@@ -72,7 +72,7 @@ for my $dir (@dirs) {
     }
     my $git_dir = $dir . ".git";
     unless (-d $git_dir) {
-        warn "$0: WARNING: directory not found '$$git_dir'\n";
+        warn "$0: WARNING: directory not found '$git_dir'\n";
         next;
     }
     if (!chdir($dir)) {
