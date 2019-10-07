@@ -44,7 +44,7 @@ my @dirs;
 for (@ARGV) {
     my $dir = Cwd::abs_path($_);
     if($dir) {
-        $dir =~ s{/\.git(?:/.*?)\z}{}s;
+        $dir =~ s{/\.git(?:/.*?)?\z}{}s;
         $dir =~ s{\/*\z}{/}s;
         if(-d $dir) {
             push @dirs, $dir;
