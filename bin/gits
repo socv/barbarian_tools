@@ -1,6 +1,0 @@
-#!/usr/bin/env perl
-use strict;
-use warnings;
-
-$ARGV[0] = "s" . $ARGV[0] if @ARGV;
-exec("git", @ARGV);
