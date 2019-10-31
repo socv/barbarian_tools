@@ -1,0 +1,15 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+my $git_org = ($0 =~ s{.*/}{}rs);
+
+(scalar @ARGV) or die "$git_org: command not found...\n";
+
+my $git = ($git_org =~ s/\A(git)([a-z])\z/$1/rs);
+($git ne $git_org) or die "$git_org: command not found...\n";
+
+$ARGV[0] = $2 . $ARGV[0];
+
+print {*STDERR} "$git_org: EXEC: $git @ARGV\n";
+exec($git, @ARGV);
