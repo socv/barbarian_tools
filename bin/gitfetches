@@ -25,6 +25,7 @@ warn $@ if $@;
 
 
 my $opt_max_procs = get_n_cpu();
+$opt_max_procs = 1;
 
 Getopt::Long::GetOptions(
     "P|max-procs=i" => \$opt_max_procs,
