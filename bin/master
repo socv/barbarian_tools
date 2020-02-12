@@ -1,0 +1,40 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use Sys::Hostname ();
+use Cwd           ();
+my $host        = (Sys::Hostname::hostname() =~ s{\..*}{}rs);
+my $user        = $ENV{USER};
+my $branch_name = "master";
+
+sub system_ {
+    my $cwd = Cwd::getcwd();
+    $cwd =~ s{/*\z}{/}s;
+    $cwd =~ s/\A$ENV{HOME}\//~\//s;
+    print {*STDERR} "\n\e[36m[$user\@$host $cwd] >\e[1m @_\e[m\n";
+    system(@_) and die "ERROR.";
+}
+
+my $initial_dir = Cwd::getcwd();
+my @dir         = @ARGV;
+push @dir, qw(.) unless @dir;
+
+for my $dir (@dir) {
+    chdir $initial_dir or die "ERROR: chdir '$initial_dir': $!";
+    chdir $dir         or die "ERROR: chdir '$dir': $!";
+    my $cwd = Cwd::getcwd();
+    eval {
+        eval {
+            if (((`git branch --show-current` || "") =~ s{\n+\z}{}rs) ne $branch_name) {
+                system_("git switch $branch_name");
+            }
+            1;
+        } or do {
+            system_("git fetch");
+            system_("git branch --delete $branch_name");
+            system_("git switch $branch_name");
+        };
+        system_("git pull");
+        1;
+    } or warn "$cwd: $@";
+}
