@@ -31,7 +31,7 @@ for my $dir (@dir) {
             1;
         } or do {
             system_("git fetch");
-            system_("git branch --delete $branch_name");
+            system_("git branch --delete $branch_name ; true");
             system_("git switch $branch_name");
         };
         system_("git pull");
