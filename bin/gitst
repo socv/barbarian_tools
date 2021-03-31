@@ -54,7 +54,7 @@ sub flush_files_untracked {
             print map { "$_\0" } @files_untracked;
             exit;
         }
-        exec("xargs", "-0", "ls", "-ald", "--full-time");
+        exec("xargs", "-0", "ls", "-ald", "--full-time", "--");
         exit 99;
     }
     while (<$fh_ls>) {
