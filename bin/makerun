@@ -4,8 +4,16 @@ use warnings;
 
 my $target = shift @ARGV // die "Usage: $0 TARGET [ARGS..]\n";
 
+open(my $keep_stdout, ">&", *STDOUT) or die "ERROR: dup2: $!";
+open(STDOUT, ">&", *STDERR) or die "ERROR: dup2: $!";
+
 system("make", $target);
-if($?) {
+my $status = $?;
+
+open(STDOUT, ">&", $keep_stdout) or die "ERROR: dup2: $!";
+
+if($status) {
   exit 1;
 }
+
 exec($target, @ARGV);
